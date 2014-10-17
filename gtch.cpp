@@ -83,7 +83,7 @@ gtch::ref_sinus_sample_ponter_t gtch::get_ref_sinus()
   return ref_sinus;
 }
 #endif //FLASH_SINUS
-
+#ifdef NOP
 size_t gtch::shift_for_left_aligment_irs_i16(const irs_i16 a_value)
 {
   irs_i16 value = a_value;
@@ -99,7 +99,7 @@ size_t gtch::shift_for_left_aligment_irs_i16(const irs_i16 a_value)
   }
   return shift;
 }
-
+#endif // NOP
 irs::string_t gtch::align_center(const irs::string_t a_str,
   const size_t a_width, const irs::char_t a_fill)
 {

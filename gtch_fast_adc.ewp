@@ -1822,13 +1822,25 @@
   <group>
     <name>app</name>
     <file>
+      <name>$PROJ_DIR$\adc_rms.cpp</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\adc_rms.h</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\defs.h</name>
     </file>
     <file>
       <name>$PROJ_DIR$\generator.cpp</name>
+      <excluded>
+        <configuration>Debug</configuration>
+      </excluded>
     </file>
     <file>
       <name>$PROJ_DIR$\generator.h</name>
+      <excluded>
+        <configuration>Debug</configuration>
+      </excluded>
     </file>
     <file>
       <name>$PROJ_DIR$\gtch.cpp</name>
@@ -1855,10 +1867,22 @@
       <name>$PROJ_DIR$\gtchint.h</name>
     </file>
     <file>
+      <name>$PROJ_DIR$\interrupt_generator.cpp</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\interrupt_generator.h</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\main.cpp</name>
     </file>
     <file>
       <name>$PROJ_DIR$\old.h</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\sinus_generator.cpp</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\sinus_generator.h</name>
     </file>
   </group>
   <group>

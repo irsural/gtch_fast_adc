@@ -18,7 +18,7 @@
 #include <irskbd.h>
 #include <irsmem.h>
 
-#include "generator.h"
+#include "interrupt_generator.h"
 #include "gtchadc.h"
 #include "gtchint.h"
 
@@ -56,6 +56,9 @@ public:
   typedef size_t size_type;
   typedef interrupt_generator_t int_generator_t;
   typedef gtch::pa3_relay_interrupt_generator_t relay_interrupt_generator_t;
+  enum { sinus_size = 256 };
+  enum { sinus_pwm_frequency = 62500 };
+  const double m_ir2183_dead_time;
 private:
   #if GTCH_SK_STM32F217
   irs::arm::io_pin_t m_memory_chip_select_pin;
@@ -68,7 +71,7 @@ private:
   vector<irs::handle_t<irs::gpio_pin_t> > m_key_drv_vertical_pins;
   irs::mxkey_drv_mc_t m_keyboard_drv;
   const adc_settings_t m_adc_settings;
-  irs::arm::st_adc_t m_adc;  
+  irs::arm::st_adc_t m_adc;
   irs::blink_t m_debug_led;
   irs::pwm_pin_t m_buzzer_pin;
   irs::arm::io_pin_t m_relay_contact_pin;

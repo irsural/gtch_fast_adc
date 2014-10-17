@@ -13,6 +13,8 @@
 
 #include "gtchcfg.h"
 #include "defs.h"
+#include "sinus_generator.h"
+#include "adc_rms.h"
 
 #include <irsfinal.h>
 
@@ -160,6 +162,7 @@ public:
 
 
 //------------------------------------------------------------------------------
+#ifdef NOP
 size_t shift_for_left_aligment_irs_i16(const irs_i16 a_value);
 template <class INT_GEN, irs_u16 NUM_OF_POINTS>
 class sinus_generator_t //: public irs::generator_t
@@ -412,7 +415,7 @@ void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::apply_frequency()
   irs_u32 floor_len = irs_u32(float_floor_len);
   m_floor_len = (ceil_len - floor_len) / 4;
 }
-
+#endif // NOP
 //------------------------------------------------------------------------------
 
 class gtch_reg_t
@@ -593,6 +596,7 @@ irs::string_t align_center(const irs::string_t a_str, const size_t a_width,
 template <class CFG>
 class app_t
 {
+  typedef size_t size_type;
   static const irs_u16 m_num_of_points = num_of_points;
   typedef typename CFG::int_generator_t int_generator_t;
 
@@ -673,8 +677,18 @@ class app_t
   irs::pwm_gen_t* mp_lcd_contrast_pwm;
   irs::pwm_gen_t &m_sinus_pwm;
   bool m_overcurrent_detection_enabled;
-  int_generator_t &m_int_generator;
-  sinus_generator_t<int_generator_t, m_num_of_points> m_sinus_generator;
+  int_generator_t &m_interrupt_generator;
+
+  size_type m_period_sample_count;
+  size_type m_sko_period_count;
+  size_type m_short_sko_period_count;
+  size_type m_average_period_count;
+  size_type m_sko_point_count;
+  size_type m_delta_point_count;
+  gtch::adc_rms_t m_fast_adc_rms;
+  enum { interrupt_freq_boost_factor = 2 };
+  //sinus_generator_t<int_generator_t, m_num_of_points> m_sinus_generator;
+  sinus_generator_t m_sinus_generator;
   mxdisplay_drv_t* mp_lcd_drv;
   mxdisplay_drv_service_t m_lcd_drv_service;
   mxkey_event_t m_buzzer_kb_event;
@@ -686,7 +700,7 @@ class app_t
   irs::loop_timer_t m_filter_update_interval_timer;
 
   adc_settings_t m_adc_settings;
-  adc_filter_t m_adc_filter;
+  //adc_filter_t m_adc_filter;
   irs::fade_data_t m_adc_fade_data;
   //  Non-volatile memory
   irs_uarc m_nonvolatile_data_size;
@@ -986,6 +1000,7 @@ class app_t
   bool m_reset_correct_nonvolatile_memory;
   irs_menu_bool_item_t m_reset_correct_nonvolatile_memory_item;
 
+  std::vector<size_type> make_adc_channels_sko_period_count();
   float adc_to_voltage(adc_data_t a_adc);
   void to_stop();
   void to_start();
@@ -1029,8 +1044,21 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   mp_lcd_contrast_pwm(m_cfg.get_lcd_contrast_pwm()),
   m_sinus_pwm(m_cfg.get_sinus_pwm()),
   m_overcurrent_detection_enabled(false),
-  m_int_generator(m_cfg.get_int_generator()),
-  m_sinus_generator(m_int_generator, m_sinus_pwm),
+  m_interrupt_generator(m_cfg.get_int_generator()),
+
+  m_period_sample_count(128), //100
+  m_sko_period_count(50),//50
+  m_short_sko_period_count(5),
+  m_average_period_count(1),
+  m_sko_point_count(60),
+  m_delta_point_count(60),
+  m_fast_adc_rms(NULL/*m_cfg.get_fast_adc_spi()*/, m_cfg.get_adc(), 0,
+    &m_interrupt_generator, 4, m_period_sample_count,
+    make_adc_channels_sko_period_count(),
+    m_average_period_count, m_sko_point_count, m_delta_point_count),
+
+  m_sinus_generator(&m_interrupt_generator, interrupt_freq_boost_factor, &m_sinus_pwm,
+    CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size),
   mp_lcd_drv(m_cfg.get_lcd_drv()),
   m_lcd_drv_service(),
   m_buzzer_kb_event(),
@@ -1041,8 +1069,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_filter_update_interval(0.1),
   m_filter_update_interval_timer(irs::make_cnt_s(m_filter_update_interval)),
   m_adc_settings(m_cfg.get_adc_settings()),
-  m_adc_filter(m_cfg.get_adc(), 0, m_adc_settings.sampling_time,
-    m_adc_settings.filter_point_count, m_adc_settings.shift),
+  //m_adc_filter(m_cfg.get_adc(), 0, m_adc_settings.sampling_time,
+    //m_adc_settings.filter_point_count, m_adc_settings.shift),
   m_adc_fade_data(),
   //  Nonvolatile memory
 
@@ -1405,7 +1433,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   }
 
   //  АЦП
-  m_adc_filter.restart();
+  //m_adc_filter.restart();
   m_adc_fade_data.x1 = 0.;
   m_adc_fade_data.y1 = 0.;
   m_adc_fade_data.t = m_t_adc /m_filter_update_interval;
@@ -1803,8 +1831,13 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.add(&m_reset_correct_nonvolatile_memory_item);
   m_main_menu.hide_item(&m_reset_correct_nonvolatile_memory_item);
 
-  mp_window_watchdog->start();
-  mp_independent_watchdog->start();
+  // На время отладки watchdog
+  //mp_window_watchdog->start();
+  //mp_independent_watchdog->start();
+
+  m_sinus_generator.set_amplitude(0.1f);
+  m_sinus_generator.set_frequency(m_freq);
+  m_interrupt_generator.start();
 }
 template <class CFG>
 app_t<CFG>::~app_t()
@@ -1833,6 +1866,16 @@ void app_t<CFG>::gtch_relay_int_t::exec()
   }
   m_outer.m_buzzer.bzzz();
   mxfact_event_t::exec();
+}
+
+template <class CFG>
+std::vector<typename app_t<CFG>::size_type>
+app_t<CFG>::make_adc_channels_sko_period_count()
+{
+  std::vector<size_type> sizes;
+  sizes.push_back(m_sko_period_count);
+  sizes.push_back(m_short_sko_period_count);
+  return sizes;
 }
 
 template <class CFG>
@@ -2804,7 +2847,8 @@ void app_t<CFG>::tick()
   m_keyboard_event_gen.tick();
   (*mp_debug_led)();
   m_cfg.tick();
-  m_adc_filter.tick();
+  //m_adc_filter.tick();
+  m_fast_adc_rms.tick();
   m_buzzer.tick();
   bool is_main_srceen_cur = (mp_cur_menu == &m_main_screen);
   if (m_contrast_hold_key.check(is_main_srceen_cur)) {
@@ -2829,7 +2873,8 @@ void app_t<CFG>::out_tick()
   }
 
   if (m_filter_update_interval_timer.check()) {
-    m_adc_value = m_adc_filter.get_value();
+    //m_adc_value = m_adc_filter.get_value();
+    m_adc_value = m_fast_adc_rms.get_slow_adc_voltage_code();
     m_voltage = adc_to_voltage(m_adc_value);
     if (m_voltage_filter_on) {
       m_voltage_display = fade(&m_adc_fade_data, m_voltage);

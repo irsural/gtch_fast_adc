@@ -5,6 +5,7 @@
 #include <irsfinal.h>
 
 gtch::cfg_t::cfg_t():
+  m_ir2183_dead_time(500e-9),
   #if GTCH_SK_STM32F217
   m_memory_chip_select_pin(GPIO_PORTD, 7, irs::io_t::dir_out, irs::io_pin_on),
   #endif // GTCH_SK_STM32F217
@@ -21,7 +22,7 @@ gtch::cfg_t::cfg_t():
   m_key_drv_horizontal_pins(),
   m_key_drv_vertical_pins(),
   m_keyboard_drv(),
-  m_adc_settings(3.3, 1e-2, 10, 0.1, -250),
+  m_adc_settings(3.3, 10e-6, 10, 0.1, -250),
   #if GTCH_SK_STM32F217
   m_adc(ADC3_BASE, irs::arm::st_adc_t::ADC3_PF8_CH6/*ADC1_BASE, irs::arm::st_adc_t::ADC123_PC0_CH10*/,
     irs::make_cnt_s(m_adc_settings.sampling_time)),
@@ -271,5 +272,5 @@ void gtch::cfg_t::tick()
   m_eeprom_correct.tick();
   m_lcd_drv.tick();
   m_termometr.tick();
-  m_adc.tick();
+  //m_adc.tick();
 }
