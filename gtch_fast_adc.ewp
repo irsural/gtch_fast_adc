@@ -573,7 +573,7 @@
         </option>
         <option>
           <name>OOCOutputFile</name>
-          <state>gtch_arm.hex</state>
+          <state>gtch_fast_adc.hex</state>
         </option>
         <option>
           <name>OOCCommandLineProducer</name>
@@ -1853,9 +1853,6 @@
     </file>
     <file>
       <name>$PROJ_DIR$\gtchint.h</name>
-    </file>
-    <file>
-      <name>$PROJ_DIR$\interrupt.cpp</name>
     </file>
     <file>
       <name>$PROJ_DIR$\main.cpp</name>

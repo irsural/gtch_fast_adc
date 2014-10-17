@@ -1342,12 +1342,12 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
 
   m_splash_timer.start();
   ostringstream revision_ostr;
-  revision_ostr << "Âåðñèÿ " <<  a_revision << "A";
+  revision_ostr << "Âåðñèÿ " <<  a_revision << "F";
   irs::string_t revision_str = align_center(revision_ostr.str(),
     m_lcd_drv_service.get_width());
   m_lcd_drv_service.outtextpos(0, 1, "      ÃÒ×-03Ì       ");
   m_lcd_drv_service.outtextpos(0, 2, revision_str.c_str());
-  m_lcd_drv_service.outtextpos(0, 3, "  ÎÎÎ 'ÐÝÑ' 2013 ã. ");
+  m_lcd_drv_service.outtextpos(0, 3, "  ÎÎÎ 'ÐÝÑ' 2014 ã. ");
   m_lcd_drv_service.outtextpos(0, 0, "   www.irsural.ru   ");
 
   {
