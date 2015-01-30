@@ -78,6 +78,21 @@ int main()
   static irs::arm::com_buf log_buf(1, 10, 1000000);
   irs::mlog().rdbuf(&log_buf);
 
+  // Инициализация RX для UART
+  /*gpio_channel_t rx_channel = PA10;
+  irs::clock_enable(rx_channel);
+  irs::gpio_moder_alternate_function_enable(rx_channel);
+  irs::gpio_alternate_function_select(rx_channel, GPIO_AF_USART1);
+
+  volatile usart_regs_t* usart = get_usart(1);
+  usart->USART_CR1_bit.RE = 1;
+
+  while (true) {
+    while (usart->USART_SR_bit.RXNE != 1);
+
+    irs::mlog() << "Вы нажали " << << endl;
+  }*/
+
   #ifdef GTCH_DEBUG
 
   #if GTCH_SK_STM32F217

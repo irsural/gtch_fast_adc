@@ -1139,9 +1139,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_end_item(&m_freq_end),
   //  Уставка напряжения
   m_min_voltage_debug(0.),
-  m_max_voltage_debug(200.),
+  m_max_voltage_debug(300.),
   m_min_voltage_release(0.),
-  m_max_voltage_release(130.),
+  m_max_voltage_release(220.),
   m_min_voltage(m_min_voltage_release),
   m_max_voltage(m_max_voltage_release),
   m_voltage_step(1.0),
@@ -1835,6 +1835,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   //mp_window_watchdog->start();
   //mp_independent_watchdog->start();
 
+  m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
+  m_sinus_generator.stop();
   m_sinus_generator.set_amplitude(0.1f);
   m_sinus_generator.set_frequency(m_freq);
   m_interrupt_generator.start();
@@ -1885,8 +1887,9 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
   const float k = m_adc_settings.v_reference/
     m_cfg.get_adc()->get_u16_maximum()*100;
   #else // Плата ГТЧ
-  // Коэффициент подобран экспериментально при U = 100 В
-  const float experimental_factor = 43.07247;
+  // Коэффициент подобран экспериментально при U = 51.4 В
+  //const float experimental_factor = 43.07247;
+  const float experimental_factor = 245.991662;
   const float k = experimental_factor*
     (m_adc_settings.v_reference/m_cfg.get_adc()->get_u16_maximum());
   #endif // Плата ГТЧ
@@ -2876,6 +2879,7 @@ void app_t<CFG>::out_tick()
     //m_adc_value = m_adc_filter.get_value();
     m_adc_value = m_fast_adc_rms.get_slow_adc_voltage_code();
     m_voltage = adc_to_voltage(m_adc_value);
+    //m_voltage = 9;
     if (m_voltage_filter_on) {
       m_voltage_display = fade(&m_adc_fade_data, m_voltage);
     } else {
