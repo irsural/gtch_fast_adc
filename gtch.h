@@ -56,7 +56,8 @@ struct nonvolatile_data_t
   irs::conn_data_t<float> freq_begin;
   irs::conn_data_t<float> freq_end;
   irs::conn_data_t<float> speed_freq;
-  irs::conn_data_t<float> voltage_ref;
+  irs::conn_data_t<float> ac_voltage_ref;
+  irs::conn_data_t<float> dc_voltage_ref;
   irs::conn_data_t<bool> mode_dc_enabled;
   irs::conn_data_t<bool> go_to_end;
   irs::conn_data_t<bool> need_meas_time;
@@ -97,7 +98,8 @@ struct nonvolatile_data_t
     index = freq_begin.connect(ap_data, index);
     index = freq_end.connect(ap_data, index);
     index = speed_freq.connect(ap_data, index);
-    index = voltage_ref.connect(ap_data, index);
+    index = ac_voltage_ref.connect(ap_data, index);
+    index = dc_voltage_ref.connect(ap_data, index);
     index = mode_dc_enabled.connect(ap_data, index);
     index = go_to_end.connect(ap_data, index);
     index = need_meas_time.connect(ap_data, index);
@@ -463,12 +465,13 @@ public:
     const T& a_min, const T& a_max);
   ~bounded_user_input_t();
   void add_change_event(mxfact_event_t *ap_event);
-  inline void operator ++ (int) { inc(); };
-  inline void operator -- (int) { dec(); };
+  inline void operator ++ (int) { inc(); }
+  inline void operator -- (int) { dec(); }
   void process(irskey_t a_key);
   void inc();
   void dec();
   void set_keys(const irskey_t a_key_inc, const irskey_t a_key_dec);
+  void reset_step();
   /*void set_min(const T& a_min);
   void set_max(const T& a_max);*/
 private:
@@ -525,6 +528,10 @@ void bounded_user_input_t<T>::add_change_event(mxfact_event_t *ap_event)
 template <class T>
 void bounded_user_input_t<T>::process(irskey_t a_key)
 {
+  if ((m_key_inc == irskey_none) && (m_key_dec == irskey_none)) {
+    return;
+  }
+
   if (a_key == m_key_inc) {
     if (m_process == DEC) {
       m_current_step = m_step;
@@ -590,6 +597,12 @@ void bounded_user_input_t<T>::set_keys(const irskey_t a_key_inc,
 {
   m_key_inc = a_key_inc;
   m_key_dec = a_key_dec;
+}
+
+template <class T>
+void bounded_user_input_t<T>::reset_step()
+{
+  m_current_step = m_step;
 }
 
 /*void bounded_user_input_t<T>::set_min(const T& a_min)
@@ -848,12 +861,12 @@ class app_t
   double m_freq_end;
   irs_menu_simply_item_t<double> m_freq_end_item;
   //  Уставка напряжения
-  const double m_min_voltage_debug;
-  const double m_max_voltage_debug;
-  const double m_min_voltage_release;
-  const double m_max_voltage_release;
+  const double m_min_ac_voltage_debug;
+  const double m_max_ac_voltage_debug;
+  const double m_min_ac_voltage_release;
+  const double m_max_ac_voltage_release;
   const double m_min_dc_voltage_debug;
-  const double m_max_dc_volgate_debug;
+  const double m_max_dc_voltage_debug;
   const double m_min_dc_voltage_release;
   const double m_max_dc_voltage_release;
   double m_min_voltage;
@@ -1046,6 +1059,7 @@ class app_t
   irs_menu_bool_item_t m_reset_correct_nonvolatile_memory_item;
 
   void update_configuration_for_mode_dc_ac();
+  void update_config_voltage_range();
   std::vector<size_type> make_adc_channels_sko_period_count();
   float adc_to_voltage(adc_data_t a_adc);
   void to_stop();
@@ -1189,16 +1203,16 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_end(m_max_freq),
   m_freq_end_item(&m_freq_end),
   //  Уставка напряжения
-  m_min_voltage_debug(0.),
-  m_max_voltage_debug(300.),
-  m_min_voltage_release(0.),
-  m_max_voltage_release(220.),
+  m_min_ac_voltage_debug(0.),
+  m_max_ac_voltage_debug(300.),
+  m_min_ac_voltage_release(0.),
+  m_max_ac_voltage_release(220.),
   m_min_dc_voltage_debug(0.),
-  m_max_dc_volgate_debug(400.),
+  m_max_dc_voltage_debug(400.),
   m_min_dc_voltage_release(0.),
   m_max_dc_voltage_release(300.),
-  m_min_voltage(m_min_voltage_release),
-  m_max_voltage(m_max_voltage_release),
+  m_min_voltage(m_min_ac_voltage_release),
+  m_max_voltage(m_max_ac_voltage_release),
   m_voltage_step(1.0),
   m_voltage_step_max(10),
   m_voltage_ref(m_min_voltage),
@@ -1473,7 +1487,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_begin = m_nonvolatile_data.freq_begin;
   m_freq_end = m_nonvolatile_data.freq_end;
   m_speed_freq = m_nonvolatile_data.speed_freq;
-  m_voltage_ref = m_nonvolatile_data.voltage_ref;
+  m_voltage_ref = m_nonvolatile_data.ac_voltage_ref;
   m_mode_dc_enabled = m_nonvolatile_data.mode_dc_enabled;
   m_scan_go_to_end = m_nonvolatile_data.go_to_end;
   m_scan_need_meas_time = m_nonvolatile_data.need_meas_time;
@@ -1954,33 +1968,69 @@ void app_t<CFG>::update_configuration_for_mode_dc_ac()
   }
 
   if (m_mode_dc_enabled) {
-    m_freq_begin_saved_copy = m_freq_begin;
-    m_freq_end_saved_copy = m_freq_end;
-    m_speed_freq_saved_copy = m_speed_freq;
+    //m_freq_begin_saved_copy = m_freq_begin;
+    //m_freq_end_saved_copy = m_freq_end;
+    //m_speed_freq_saved_copy = m_speed_freq;
+    m_voltage_ref = m_nonvolatile_data.dc_voltage_ref;
     m_freq_begin = 0;
     m_freq_end = 0;
     m_speed_freq = 0;
+
     m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_dc);
     mp_generator.reset();
     mp_generator.reset(new dc_generator_t(&m_sinus_pwm,
       m_cfg.m_ir2183_dead_time));
 
-    /*if () {
-      m_voltage_ref =
-      //m_voltage_ref_input.set_max(m_max_dc_voltage_release);
-    }*/
+    m_freq_begin_input.set_keys(irskey_none, irskey_none);
+    m_freq_end_input.set_keys(irskey_none, irskey_none);
+    m_speed_freq_input.set_keys(irskey_none, irskey_none);
   } else {
-    m_freq_begin = m_freq_begin_saved_copy;
-    m_freq_end = m_freq_end_saved_copy;
-    m_speed_freq = m_speed_freq_saved_copy;
+    m_voltage_ref = m_nonvolatile_data.ac_voltage_ref;
+    m_freq_begin = m_nonvolatile_data.freq_begin;   // m_freq_begin_saved_copy;
+    m_freq_end = m_nonvolatile_data.freq_end;       //m_freq_end_saved_copy;
+    m_speed_freq = m_nonvolatile_data.speed_freq;   //m_speed_freq_saved_copy;
     m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
     mp_generator.reset();
     mp_generator.reset(new sinus_generator_t(&m_interrupt_generator,
       interrupt_freq_boost_factor, &m_sinus_pwm,
       CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size));
 
+    m_freq_begin_input.set_keys(static_cast<irskey_t>(m_key_Fn_up),
+      static_cast<irskey_t>(m_key_Fn_down));
+    m_freq_end_input.set_keys(static_cast<irskey_t>(m_key_Fk_up),
+      static_cast<irskey_t>(m_key_Fk_down));
+    m_speed_freq_input.set_keys(static_cast<irskey_t>(m_key_S_up),
+      static_cast<irskey_t>(m_key_S_down));
   }
+  update_config_voltage_range();
+
   m_mode_dc_enabled_previous = m_mode_dc_enabled;
+}
+
+template <class CFG>
+void app_t<CFG>::update_config_voltage_range()
+{
+  if (m_mode_dc_enabled) {
+    if (m_interface_mode == RELEASE) {
+      m_min_voltage = m_min_dc_voltage_release;
+      m_max_voltage = m_max_dc_voltage_release;
+    } else {
+      m_min_voltage = m_min_dc_voltage_debug;
+      m_max_voltage = m_max_dc_voltage_debug;
+    }
+  } else {
+    if (m_interface_mode == RELEASE) {
+      m_min_voltage = m_min_ac_voltage_release;
+      m_max_voltage = m_max_ac_voltage_release;
+    } else {
+      m_min_voltage = m_min_ac_voltage_debug;
+      m_max_voltage = m_max_ac_voltage_debug;
+    }
+  }
+
+  m_voltage_ref = irs::bound(m_voltage_ref, m_min_voltage, m_max_voltage);
+
+  m_voltage_ref_input.reset_step();
 }
 
 template <class CFG>
@@ -2350,17 +2400,27 @@ void app_t<CFG>::in_tick()
       m_nonvolatile_data.termo_limit = m_termo_limit;
     }
     if (m_trans_freq_begin_nonv_event.check()) {
-      m_nonvolatile_data.freq_begin = m_freq_begin;
+      if (!m_mode_dc_enabled) {
+        m_nonvolatile_data.freq_begin = m_freq_begin;
+      }
     }
     if (m_trans_freq_end_nonv_event.check()) {
-      m_nonvolatile_data.freq_end = m_freq_end;
+      if (!m_mode_dc_enabled) {
+        m_nonvolatile_data.freq_end = m_freq_end;
+      }
     }
     if (m_trans_speed_freq_nonv_event.check()) {
-      m_nonvolatile_data.speed_freq = m_speed_freq;
+      if (!m_mode_dc_enabled) {
+        m_nonvolatile_data.speed_freq = m_speed_freq;
+      }
     }
     if (m_trans_voltage_ref_nonv_event.check()) {
       if (m_interface_mode == RELEASE) {
-        m_nonvolatile_data.voltage_ref = m_voltage_ref;
+        if (m_mode_dc_enabled) {
+          m_nonvolatile_data.dc_voltage_ref = m_voltage_ref;
+        } else {
+          m_nonvolatile_data.ac_voltage_ref = m_voltage_ref;
+        }
       }
     }
     if (m_trans_mode_dc_nonv_event.check()) {
@@ -2481,10 +2541,10 @@ void app_t<CFG>::in_tick()
         m_main_menu.show_item(&m_correct_freq_by_time_item);
         m_main_menu.show_item(&m_tuda_obratno_item);
 
-        m_min_voltage = m_min_voltage_release;
-        m_max_voltage = m_max_voltage_release;
+        /*m_min_voltage = m_min_ac_voltage_release;
+        m_max_voltage = m_max_ac_voltage_release;
         if (m_voltage_ref < m_min_voltage) m_voltage_ref = m_min_voltage;
-        if (m_voltage_ref > m_max_voltage) m_voltage_ref = m_max_voltage;
+        if (m_voltage_ref > m_max_voltage) m_voltage_ref = m_max_voltage;*/
         strcpy(mp_relay_string_2, "");
         m_can_reg = true;
         m_interface_mode = RELEASE;
@@ -2515,13 +2575,14 @@ void app_t<CFG>::in_tick()
         m_main_menu.hide_item(&m_correct_freq_by_time_item);
         m_main_menu.hide_item(&m_tuda_obratno_item);
 
-        m_min_voltage = m_min_voltage_debug;
-        m_max_voltage = m_max_voltage_debug;
+        //m_min_voltage = m_min_ac_voltage_debug;
+        //m_max_voltage = m_max_ac_voltage_debug;
         strcpy(mp_relay_string_2, "<СТОП>");
         m_interface_mode = DEBUG;
         break;
       }
     }
+    update_config_voltage_range();
   }
 
   switch (m_status) {
@@ -2535,7 +2596,20 @@ void app_t<CFG>::in_tick()
     }
     case STOP: {
       if (mp_cur_menu == &m_main_screen) {
-        switch_key(key);
+        if ((key == m_key_Fn_up) && m_mode_dc_enabled) {
+          m_mode_dc_enabled = false;
+          m_trans_mode_dc_nonv_event.exec();
+          update_configuration_for_mode_dc_ac();
+        } else if ((key == m_key_Fn_down) && (m_freq_begin == m_min_freq)) {
+          if (!m_mode_dc_enabled) {
+            m_mode_dc_enabled = true;
+            m_trans_mode_dc_nonv_event.exec();
+            update_configuration_for_mode_dc_ac();
+          }
+        } else {
+          switch_key(key);
+        }
+
         if (m_freq != m_freq_begin) {
           m_freq = m_freq_begin;
         }
@@ -3291,7 +3365,8 @@ void app_t<CFG>::reset_nonvolatile_memory()
   m_nonvolatile_data.freq_begin = 45.f;
   m_nonvolatile_data.freq_end = 55.f;
   m_nonvolatile_data.speed_freq = 1.f;
-  m_nonvolatile_data.voltage_ref = 30.f;
+  m_nonvolatile_data.dc_voltage_ref = 30.f;
+  m_nonvolatile_data.ac_voltage_ref = 30.f;
   m_nonvolatile_data.mode_dc_enabled = false;
   m_nonvolatile_data.go_to_end = true;
   m_nonvolatile_data.need_meas_time = true;
