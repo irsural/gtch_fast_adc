@@ -19,6 +19,7 @@
 #include <irsmem.h>
 
 #include "interrupt_generator.h"
+#include "adc_rms.h"
 #include "gtchadc.h"
 #include "gtchint.h"
 
@@ -71,7 +72,8 @@ private:
   vector<irs::handle_t<irs::gpio_pin_t> > m_key_drv_vertical_pins;
   irs::mxkey_drv_mc_t m_keyboard_drv;
   const adc_settings_t m_adc_settings;
-  irs::arm::st_adc_t m_adc;
+  //irs::arm::st_adc_t m_adc;
+  irs::arm::st_multi_adc_t m_adc;
   irs::blink_t m_debug_led;
   irs::pwm_pin_t m_buzzer_pin;
   irs::arm::io_pin_t m_relay_contact_pin;

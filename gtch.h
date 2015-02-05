@@ -57,6 +57,7 @@ struct nonvolatile_data_t
   irs::conn_data_t<float> freq_end;
   irs::conn_data_t<float> speed_freq;
   irs::conn_data_t<float> voltage_ref;
+  irs::conn_data_t<bool> mode_dc_enabled;
   irs::conn_data_t<bool> go_to_end;
   irs::conn_data_t<bool> need_meas_time;
   irs::conn_data_t<bool> correct_freq_by_time;
@@ -97,6 +98,7 @@ struct nonvolatile_data_t
     index = freq_end.connect(ap_data, index);
     index = speed_freq.connect(ap_data, index);
     index = voltage_ref.connect(ap_data, index);
+    index = mode_dc_enabled.connect(ap_data, index);
     index = go_to_end.connect(ap_data, index);
     index = need_meas_time.connect(ap_data, index);
     index = correct_freq_by_time.connect(ap_data, index);
@@ -467,6 +469,8 @@ public:
   void inc();
   void dec();
   void set_keys(const irskey_t a_key_inc, const irskey_t a_key_dec);
+  /*void set_min(const T& a_min);
+  void set_max(const T& a_max);*/
 private:
   enum process_t {
     INC,
@@ -588,6 +592,28 @@ void bounded_user_input_t<T>::set_keys(const irskey_t a_key_inc,
   m_key_dec = a_key_dec;
 }
 
+/*void bounded_user_input_t<T>::set_min(const T& a_min)
+{
+  m_min = a_min;
+  if (m_var < m_min) {
+    m_var = m_min;
+    if (mp_event) {
+      mp_event->exec();
+    }
+  }
+}
+
+void bounded_user_input_t<T>::set_max(const T& a_max)
+{
+  m_max = a_max;
+  if (m_var > m_max) {
+    m_var = m_max;
+    if (mp_event) {
+      mp_event->exec();
+    }
+  }
+}*/
+
 //------------------------------------------------------------------------------
 
 irs::string_t align_center(const irs::string_t a_str, const size_t a_width,
@@ -600,9 +626,14 @@ class app_t
   static const irs_u16 m_num_of_points = num_of_points;
   typedef typename CFG::int_generator_t int_generator_t;
 
-  typedef typename adc_filter_t::adc_data_t adc_data_t;
+  //typedef typename adc_filter_t::adc_data_t adc_data_t;
+  typedef double adc_data_t;
   typedef typename CFG::relay_interrupt_generator_t relay_interrupt_generator_t;
 
+  enum mode_dc_ac_t {
+    MODE_DC,
+    MODE_AC
+  };
   enum status_t {
     SPLASH,
     STOP,
@@ -688,7 +719,7 @@ class app_t
   gtch::adc_rms_t m_fast_adc_rms;
   enum { interrupt_freq_boost_factor = 2 };
   //sinus_generator_t<int_generator_t, m_num_of_points> m_sinus_generator;
-  sinus_generator_t m_sinus_generator;
+  irs::handle_t<generator_t> mp_generator;
   mxdisplay_drv_t* mp_lcd_drv;
   mxdisplay_drv_service_t m_lcd_drv_service;
   mxkey_event_t m_buzzer_kb_event;
@@ -733,6 +764,7 @@ class app_t
   bool m_reg_koefs_changed;
   bool m_can_reg;
   //
+  mode_dc_ac_t m_mode_dc_ac;
   status_t m_status;
   irs::timer_t m_splash_timer;
   //  Отладочный режим
@@ -804,12 +836,15 @@ class app_t
   const double m_max_speed;
   const double m_speed_step;
   const double m_steed_step_max;
+  double m_speed_freq_saved_copy;
   double m_speed_freq;
   irs_menu_simply_item_t<double> m_speed_freq_item;
   //  Начальная частота
+  double m_freq_begin_saved_copy;
   double m_freq_begin;
   irs_menu_simply_item_t<double> m_freq_begin_item;
   //  Конечная частота
+  double m_freq_end_saved_copy;
   double m_freq_end;
   irs_menu_simply_item_t<double> m_freq_end_item;
   //  Уставка напряжения
@@ -817,6 +852,10 @@ class app_t
   const double m_max_voltage_debug;
   const double m_min_voltage_release;
   const double m_max_voltage_release;
+  const double m_min_dc_voltage_debug;
+  const double m_max_dc_volgate_debug;
+  const double m_min_dc_voltage_release;
+  const double m_max_dc_voltage_release;
   double m_min_voltage;
   double m_max_voltage;
   const double m_voltage_step;
@@ -883,6 +922,10 @@ class app_t
   irs_menu_simply_item_t<float> m_meas_k_item;
   //  Пункты меню сканирования
   irs_advanced_menu_t m_scan_menu;
+  //  Режим постоянного тока
+  bool m_mode_dc_enabled_previous;
+  bool m_mode_dc_enabled;
+  irs_menu_bool_item_t m_mode_dc_item;
   //  Идти до конца
   bool m_scan_go_to_end;
   irs_menu_bool_item_t m_go_to_end_item;
@@ -967,6 +1010,8 @@ class app_t
   mxfact_event_t m_trans_freq_end_nonv_event;
   mxfact_event_t m_trans_speed_freq_nonv_event;
   mxfact_event_t m_trans_voltage_ref_nonv_event;
+  mxfact_event_t m_trans_mode_dc_event;
+  mxfact_event_t m_trans_mode_dc_nonv_event;
   mxfact_event_t m_trans_go_to_end_nonv_event;
   mxfact_event_t m_trans_need_meas_time_nonv_event;
   mxfact_event_t m_trans_correct_freq_by_time_nonv_event;
@@ -1000,6 +1045,7 @@ class app_t
   bool m_reset_correct_nonvolatile_memory;
   irs_menu_bool_item_t m_reset_correct_nonvolatile_memory_item;
 
+  void update_configuration_for_mode_dc_ac();
   std::vector<size_type> make_adc_channels_sko_period_count();
   float adc_to_voltage(adc_data_t a_adc);
   void to_stop();
@@ -1057,8 +1103,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     make_adc_channels_sko_period_count(),
     m_average_period_count, m_sko_point_count, m_delta_point_count),
 
-  m_sinus_generator(&m_interrupt_generator, interrupt_freq_boost_factor, &m_sinus_pwm,
-    CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size),
+  mp_generator(new sinus_generator_t(&m_interrupt_generator,
+    interrupt_freq_boost_factor, &m_sinus_pwm,
+    CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size)),
   mp_lcd_drv(m_cfg.get_lcd_drv()),
   m_lcd_drv_service(),
   m_buzzer_kb_event(),
@@ -1094,6 +1141,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_min_meas_k_voltage(5.f),
   m_reg_koefs_changed(false),
   m_can_reg(true),
+  m_mode_dc_ac(MODE_AC),
   m_status(SPLASH),
   m_splash_timer(irs::make_cnt_s(3)),
   //  Отладочный режим
@@ -1129,12 +1177,15 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_max_speed(1.0),
   m_speed_step(0.01),
   m_steed_step_max(1),
+  m_speed_freq_saved_copy(m_min_speed),
   m_speed_freq(m_min_speed),
   m_speed_freq_item(&m_speed_freq),
   //  Начальная частота
+  m_freq_begin_saved_copy(m_min_freq),
   m_freq_begin(m_min_freq),
   m_freq_begin_item(&m_freq_begin),
   //  Конечная частота
+  m_freq_end_saved_copy(m_max_freq),
   m_freq_end(m_max_freq),
   m_freq_end_item(&m_freq_end),
   //  Уставка напряжения
@@ -1142,6 +1193,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_max_voltage_debug(300.),
   m_min_voltage_release(0.),
   m_max_voltage_release(220.),
+  m_min_dc_voltage_debug(0.),
+  m_max_dc_volgate_debug(400.),
+  m_min_dc_voltage_release(0.),
+  m_max_dc_voltage_release(300.),
   m_min_voltage(m_min_voltage_release),
   m_max_voltage(m_max_voltage_release),
   m_voltage_step(1.0),
@@ -1208,6 +1263,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_meas_k_item(&m_meas_k),
   //  Пункты меню сканирования
   m_scan_menu(),
+  //  Режим постоянного тока
+  m_mode_dc_enabled_previous(false),
+  m_mode_dc_enabled(false),
+  m_mode_dc_item((irs_bool*)&m_mode_dc_enabled, m_can_edit),
   //  Идти до конца
   m_scan_go_to_end(true),
   m_go_to_end_item((irs_bool*)&m_scan_go_to_end, m_can_edit),
@@ -1301,6 +1360,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_trans_freq_end_nonv_event(),
   m_trans_speed_freq_nonv_event(),
   m_trans_voltage_ref_nonv_event(),
+  m_trans_mode_dc_event(),
+  m_trans_mode_dc_nonv_event(),
   m_trans_go_to_end_nonv_event(),
   m_trans_need_meas_time_nonv_event(),
   m_trans_correct_freq_by_time_nonv_event(),
@@ -1375,7 +1436,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_lcd_drv_service.get_width());
   m_lcd_drv_service.outtextpos(0, 1, "      ГТЧ-03М       ");
   m_lcd_drv_service.outtextpos(0, 2, revision_str.c_str());
-  m_lcd_drv_service.outtextpos(0, 3, "  ООО 'РЭС' 2014 г. ");
+  m_lcd_drv_service.outtextpos(0, 3, "  ООО 'РЭС' 2015 г. ");
   m_lcd_drv_service.outtextpos(0, 0, "   www.irsural.ru   ");
 
   {
@@ -1413,6 +1474,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_end = m_nonvolatile_data.freq_end;
   m_speed_freq = m_nonvolatile_data.speed_freq;
   m_voltage_ref = m_nonvolatile_data.voltage_ref;
+  m_mode_dc_enabled = m_nonvolatile_data.mode_dc_enabled;
   m_scan_go_to_end = m_nonvolatile_data.go_to_end;
   m_scan_need_meas_time = m_nonvolatile_data.need_meas_time;
   m_scan_correct_freq_by_time = m_nonvolatile_data.correct_freq_by_time;
@@ -1427,9 +1489,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_dead_band = m_nonvolatile_data.dead_band;
   id(m_nonvolatile_data.id);
 
-
+  //!!! Не забыть включить обратно
   if (id() == 0) {
-    m_buzzer.bzzz();
+    //m_buzzer.bzzz();
   }
 
   //  АЦП
@@ -1442,7 +1504,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reg_pd.ki = m_ki;
   m_reg_pd.kd = m_kd;
   m_reg_pd.min = m_meas_gen_value;
-  m_reg_pd.max = m_sinus_generator.get_max_amplitude();
+  m_reg_pd.max = mp_generator->get_max_amplitude();
   m_reg_pd.prev_e = 0.;
   m_reg_pd.pp_e = 0.;
   m_reg_pd.prev_out = 0.;
@@ -1487,6 +1549,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.add(&m_limit_menu, HIDE_ITEM);
   m_main_menu.add(&m_scan_menu, HIDE_ITEM);
   m_main_menu.add(&m_correct_menu, HIDE_ITEM);
+  m_main_menu.add(&m_mode_dc_item, SHOW_ITEM);
   m_main_menu.add(&m_go_to_end_item, SHOW_ITEM);
   m_main_menu.add(&m_need_meas_time_item, SHOW_ITEM);
   m_main_menu.add(&m_correct_freq_by_time_item, SHOW_ITEM);
@@ -1668,6 +1731,12 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_speed_freq_item.set_str(mp_user_str, "S ", "",
     m_menu_item_width, m_menu_item_prec);
 
+  m_mode_dc_item.set_header("Режим пост. тока");
+  m_mode_dc_item.set_str("Включено", "Выключено");
+
+  m_mode_dc_item.add_change_event(&m_trans_mode_dc_event);
+  m_mode_dc_item.add_change_event(&m_trans_mode_dc_nonv_event);
+
   m_go_to_end_item.set_header("Остан. при сраб.");
   m_go_to_end_item.set_str("Выключено", "Включено");
   m_go_to_end_item.add_change_event(&m_trans_go_to_end_nonv_event);
@@ -1779,10 +1848,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_voltage_ref_input.add_change_event(&m_trans_voltage_ref_nonv_event);
 
   if (m_freq_correct_enable) {
-    m_sinus_generator.set_correct_freq_koef(
+    mp_generator->set_correct_freq_koef(
       m_nonvolatile_data.freq_correct_koef);
   } else {
-    m_sinus_generator.set_correct_freq_koef(1.0);
+    mp_generator->set_correct_freq_koef(1.0);
   }
 
   //  Отладочный режим
@@ -1831,14 +1900,21 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.add(&m_reset_correct_nonvolatile_memory_item);
   m_main_menu.hide_item(&m_reset_correct_nonvolatile_memory_item);
 
-  // На время отладки watchdog
+  //!!! Не забыть включить обратно
   //mp_window_watchdog->start();
   //mp_independent_watchdog->start();
 
+
+  m_freq_begin_saved_copy = m_freq_begin;
+  m_freq_end_saved_copy = m_freq_end;
+  m_speed_freq_saved_copy = m_speed_freq;
   m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
-  m_sinus_generator.stop();
-  m_sinus_generator.set_amplitude(0.1f);
-  m_sinus_generator.set_frequency(m_freq);
+  //m_mode_dc_enabled_previous = m_mode_dc_enabled;
+
+  update_configuration_for_mode_dc_ac();
+  mp_generator->stop();
+  mp_generator->set_amplitude(0.1f);
+  mp_generator->set_frequency(m_freq);
   m_interrupt_generator.start();
 }
 template <class CFG>
@@ -1871,6 +1947,43 @@ void app_t<CFG>::gtch_relay_int_t::exec()
 }
 
 template <class CFG>
+void app_t<CFG>::update_configuration_for_mode_dc_ac()
+{
+  if (m_mode_dc_enabled == m_mode_dc_enabled_previous) {
+    return;
+  }
+
+  if (m_mode_dc_enabled) {
+    m_freq_begin_saved_copy = m_freq_begin;
+    m_freq_end_saved_copy = m_freq_end;
+    m_speed_freq_saved_copy = m_speed_freq;
+    m_freq_begin = 0;
+    m_freq_end = 0;
+    m_speed_freq = 0;
+    m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_dc);
+    mp_generator.reset();
+    mp_generator.reset(new dc_generator_t(&m_sinus_pwm,
+      m_cfg.m_ir2183_dead_time));
+
+    /*if () {
+      m_voltage_ref =
+      //m_voltage_ref_input.set_max(m_max_dc_voltage_release);
+    }*/
+  } else {
+    m_freq_begin = m_freq_begin_saved_copy;
+    m_freq_end = m_freq_end_saved_copy;
+    m_speed_freq = m_speed_freq_saved_copy;
+    m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
+    mp_generator.reset();
+    mp_generator.reset(new sinus_generator_t(&m_interrupt_generator,
+      interrupt_freq_boost_factor, &m_sinus_pwm,
+      CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size));
+
+  }
+  m_mode_dc_enabled_previous = m_mode_dc_enabled;
+}
+
+template <class CFG>
 std::vector<typename app_t<CFG>::size_type>
 app_t<CFG>::make_adc_channels_sko_period_count()
 {
@@ -1889,9 +2002,12 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
   #else // Плата ГТЧ
   // Коэффициент подобран экспериментально при U = 51.4 В
   //const float experimental_factor = 43.07247;
-  const float experimental_factor = 245.991662;
+  const float experimental_factor = 122.995831;
+  float a = static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum());
+  IRS_LIB_DBG_MSG("A = " << a);
   const float k = experimental_factor*
-    (m_adc_settings.v_reference/m_cfg.get_adc()->get_u16_maximum());
+    (m_adc_settings.v_reference/
+     static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum()));
   #endif // Плата ГТЧ
   float voltage = k*a_adc;
   if (m_voltage_correct_enable && (mp_cur_menu != &m_voltage_correct_item)) {
@@ -1904,8 +2020,8 @@ template <class CFG>
 void app_t<CFG>::to_stop()
 {
   m_overcurrent_detection_enabled = false;
-  m_sinus_generator.stop();
-  m_sinus_generator.set_amplitude(0.f);
+  mp_generator->stop();
+  mp_generator->set_amplitude(0.f);
   m_reg_timer.stop();
   m_main_creep.change_static("Режим: СТОП");
   voltage_filter_off();
@@ -1930,8 +2046,8 @@ void app_t<CFG>::to_start()
   m_reg_pd.k = m_k * m_meas_k;
   float e = m_voltage_ref - m_voltage;
   pid_reg_sync(&m_reg_pd, e, m_meas_gen_value);
-  m_sinus_generator.set_amplitude(m_meas_gen_value);
-  m_sinus_generator.start();
+  mp_generator->set_amplitude(m_meas_gen_value);
+  mp_generator->start();
   m_overcurrent_detection_enabled = true;
   m_reg_timer.set(m_meas_interval);
   m_reg_timer.start();
@@ -1940,8 +2056,8 @@ void app_t<CFG>::to_start()
 template <class CFG>
 void app_t<CFG>::to_overheat()
 {
-  m_sinus_generator.stop();
-  m_sinus_generator.set_amplitude(0.f);
+  mp_generator->stop();
+  mp_generator->set_amplitude(0.f);
   m_reg_timer.stop();
   m_main_creep.change_static("< T° >");
   m_status = OVERHEAT;
@@ -2176,9 +2292,13 @@ void app_t<CFG>::in_tick()
     mp_lcd_contrast_pwm->set_duty(float(m_contrast));
   }
 
+  if (m_trans_mode_dc_event.check()) {
+    update_configuration_for_mode_dc_ac();
+  }
+
   if (m_trans_freq_begin_event.check()) {
     m_freq = m_freq_begin;
-    if (m_status == PAUSE) m_sinus_generator.set_frequency(m_freq);
+    if (m_status == PAUSE) mp_generator->set_frequency(m_freq);
   }
 
   if (m_trans_current_limit_event.check()) {
@@ -2243,6 +2363,9 @@ void app_t<CFG>::in_tick()
         m_nonvolatile_data.voltage_ref = m_voltage_ref;
       }
     }
+    if (m_trans_mode_dc_nonv_event.check()) {
+      m_nonvolatile_data.mode_dc_enabled = m_mode_dc_enabled;
+    }
     if (m_trans_go_to_end_nonv_event.check()) {
       m_nonvolatile_data.go_to_end = m_scan_go_to_end;
     }
@@ -2271,10 +2394,10 @@ void app_t<CFG>::in_tick()
     if (m_trans_freq_correct_enable_nonv_event.check()) {
       m_nonvolatile_data.freq_correct_enable = m_freq_correct_enable;
       if (m_freq_correct_enable) {
-        m_sinus_generator.set_correct_freq_koef(
+        mp_generator->set_correct_freq_koef(
           m_nonvolatile_data.freq_correct_koef);
       } else {
-        m_sinus_generator.set_correct_freq_koef(1.0);
+        mp_generator->set_correct_freq_koef(1.0);
       }
     }
     if (m_trans_freq_correct_koef_event.check()) {
@@ -2282,9 +2405,9 @@ void app_t<CFG>::in_tick()
       m_nonvolatile_data.freq_correct_koef = koef;
 
       if (m_freq_correct_enable) {
-        m_sinus_generator.set_correct_freq_koef(koef);
+        mp_generator->set_correct_freq_koef(koef);
       } else {
-        m_sinus_generator.set_correct_freq_koef(1.0);
+        mp_generator->set_correct_freq_koef(1.0);
       }
     }
     if (m_trans_t_adc_nonv_event.check()) {
@@ -2326,6 +2449,10 @@ void app_t<CFG>::in_tick()
   }
 
   const irskey_t key = m_hot_kb_event.check();
+
+  /*if (key == m_key_Fn_up) {
+    m_fast_adc_rms.show_sinus();
+  }*/
 
   if (test_switch_interface_mode(key)) {
     switch (m_interface_mode) {
@@ -2422,14 +2549,14 @@ void app_t<CFG>::in_tick()
             strcpy(mp_relay_string_2, "<УСТ>");
           }
           m_freq = m_freq_begin;
-          m_sinus_generator.set_frequency(m_freq);
+          mp_generator->set_frequency(m_freq);
           to_start();
         }
       } else if (mp_cur_menu == &m_voltage_correct_item) {
         if (m_voltage_correct_item.check_process_start())
         {
           m_status = CORRECT_V_SETUP_MEAS;
-          m_sinus_generator.set_frequency(m_freq);
+          mp_generator->set_frequency(m_freq);
           to_start();
         }
         if (key == m_key_Fn_up) {
@@ -2438,7 +2565,7 @@ void app_t<CFG>::in_tick()
         }
       } else if (mp_cur_menu == &m_freq_correct_item) {
         if (key == m_key_start) {
-          m_sinus_generator.set_correct_freq_koef(1.0);
+          mp_generator->set_correct_freq_koef(1.0);
           m_status = CORRECT_F;
           to_start();
         }
@@ -2457,7 +2584,7 @@ void app_t<CFG>::in_tick()
           to_correct_pause();
         }
         if (m_voltage_correct_item.check_process_change_param()) {
-          m_sinus_generator.set_frequency(m_freq);
+          mp_generator->set_frequency(m_freq);
         }
       }
       break;
@@ -2470,7 +2597,7 @@ void app_t<CFG>::in_tick()
         reg();
         m_voltage_correct_item.set_operating_duty(m_operating_duty);
         if (m_voltage_correct_item.check_process_change_param()) {
-          m_sinus_generator.set_frequency(m_freq);
+          mp_generator->set_frequency(m_freq);
         }
       }
       break;
@@ -2478,7 +2605,7 @@ void app_t<CFG>::in_tick()
     case CORRECT_F: {
       if (mp_cur_menu != &m_freq_correct_item || key == m_key_stop) {
         if (m_freq_correct_enable) {
-          m_sinus_generator.set_correct_freq_koef(
+          mp_generator->set_correct_freq_koef(
             m_nonvolatile_data.freq_correct_koef);
         }
         to_stop();
@@ -2553,7 +2680,7 @@ void app_t<CFG>::in_tick()
 
             m_freq = m_freq_begin;
 
-            m_sinus_generator.set_frequency(m_freq);
+            mp_generator->set_frequency(m_freq);
 
           }
         } else {
@@ -2598,7 +2725,7 @@ void app_t<CFG>::in_tick()
                 m_scan_timer.start();
 
                 m_freq = m_freq_end;
-                m_sinus_generator.set_frequency(m_freq);
+                mp_generator->set_frequency(m_freq);
                 mp_relay_interrupt_generator->start();
                 m_relay_ref_time_cnt = counter_get();
                 m_relay_was_time_forward_action = false;
@@ -2635,7 +2762,7 @@ void app_t<CFG>::in_tick()
                   m_scan_timer.set(m_scan_jump_interval);
                   m_scan_timer.start();
                   m_freq = m_freq_begin;
-                  m_sinus_generator.set_frequency(m_freq);
+                  mp_generator->set_frequency(m_freq);
                 }
               }
               break;
@@ -2646,7 +2773,7 @@ void app_t<CFG>::in_tick()
                 m_scan_timer.start();
 
                 m_freq = m_freq_begin;
-                m_sinus_generator.set_frequency(m_freq);
+                mp_generator->set_frequency(m_freq);
                 mp_relay_interrupt_generator->start();
                 m_relay_ref_time_cnt = counter_get();
                 m_relay_was_time_return_action = false;
@@ -2736,11 +2863,11 @@ void app_t<CFG>::in_tick()
                   if (m_scan_status == SCAN_FORWARD) {
                     if (m_scan_direction == UP) m_freq += m_scan_freq_step;
                     else m_freq -= m_scan_freq_step;
-                    m_sinus_generator.set_frequency(m_freq);
+                    mp_generator->set_frequency(m_freq);
                   }
                 } else {
                   m_freq = m_freq_end;
-                  m_sinus_generator.set_frequency(m_freq);
+                  mp_generator->set_frequency(m_freq);
                   if (m_scan_tuda_obratno) {
                     m_scan_status = SCAN_RETURN_SETUP;
 
@@ -2808,11 +2935,11 @@ void app_t<CFG>::in_tick()
                   if (m_scan_status == SCAN_RETURN) {
                     if (m_scan_direction == UP) m_freq += m_scan_freq_step;
                     else m_freq -= m_scan_freq_step;
-                    m_sinus_generator.set_frequency(m_freq);
+                    mp_generator->set_frequency(m_freq);
                   }
                 } else {
                   m_freq = m_freq_begin;
-                  m_sinus_generator.set_frequency(m_freq);
+                  mp_generator->set_frequency(m_freq);
                   to_message();
                 }
               }
@@ -2877,7 +3004,8 @@ void app_t<CFG>::out_tick()
 
   if (m_filter_update_interval_timer.check()) {
     //m_adc_value = m_adc_filter.get_value();
-    m_adc_value = m_fast_adc_rms.get_slow_adc_voltage_code();
+    m_adc_value = fabs(m_fast_adc_rms.get_slow_adc_voltage_code());
+    IRS_LIB_DBG_MSG("m_adc_value = " << m_adc_value);
     m_voltage = adc_to_voltage(m_adc_value);
     //m_voltage = 9;
     if (m_voltage_filter_on) {
@@ -2894,7 +3022,7 @@ void app_t<CFG>::out_tick()
     }
 
     if (m_interface_mode == DEBUG) {
-      m_pwm_out = m_sinus_generator.get_amplitude();
+      m_pwm_out = mp_generator->get_amplitude();
     }
   }
 }
@@ -2909,11 +3037,11 @@ void app_t<CFG>::switch_key(irskey_t a_key)
 
   switch (a_key) {
     case m_key_Fn_up: {
-      if (m_status == PAUSE) m_sinus_generator.set_frequency(m_freq);
+      if (m_status == PAUSE) mp_generator->set_frequency(m_freq);
       break;
     }
     case m_key_Fn_down: {
-      if (m_status == PAUSE) m_sinus_generator.set_frequency(m_freq);
+      if (m_status == PAUSE) mp_generator->set_frequency(m_freq);
       break;
     }
     case m_key_S_up: {
@@ -3068,9 +3196,9 @@ void app_t<CFG>::reg()
           (abs(e/m_voltage_ref) > (m_dead_band/100));
       }
       if (exec_reg) {
-        m_sinus_generator.set_amplitude(pid_reg(&m_reg_pd, e));
+        mp_generator->set_amplitude(pid_reg(&m_reg_pd, e));
       } else {
-        pid_reg_sync(&m_reg_pd, e, m_sinus_generator.get_amplitude());
+        pid_reg_sync(&m_reg_pd, e, mp_generator->get_amplitude());
       }
     }
     m_operating_duty = operating_duty();
@@ -3092,7 +3220,7 @@ void app_t<CFG>::reg_with_meas()
     pid_reg_sync(&m_reg_pd);
     if (m_can_reg) {
       float e = m_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
-      m_sinus_generator.set_amplitude(pid_reg(&m_reg_pd, e));
+      mp_generator->set_amplitude(pid_reg(&m_reg_pd, e));
     }
 
     m_operating_duty = operating_duty();
@@ -3152,7 +3280,7 @@ irs_u16 app_t<CFG>::id()
 template <class CFG>
 void app_t<CFG>::reset_nonvolatile_memory()
 {
-  m_nonvolatile_data.k = 0.5f;
+  m_nonvolatile_data.k = 0.1f;//0.5f;
   m_nonvolatile_data.ki = 0.5f;
   m_nonvolatile_data.kd = 0.4f;
   m_nonvolatile_data.contrast = 0.15f;
@@ -3164,6 +3292,7 @@ void app_t<CFG>::reset_nonvolatile_memory()
   m_nonvolatile_data.freq_end = 55.f;
   m_nonvolatile_data.speed_freq = 1.f;
   m_nonvolatile_data.voltage_ref = 30.f;
+  m_nonvolatile_data.mode_dc_enabled = false;
   m_nonvolatile_data.go_to_end = true;
   m_nonvolatile_data.need_meas_time = true;
   m_nonvolatile_data.correct_freq_by_time = true;
@@ -3237,7 +3366,7 @@ void irs_uarc app_t<CFG>::set_precision_voltage_menu_items(size_type a_precision
   напряжение. Частота сигнала равна Fн.
 2. Режим СЕТУП
   Никакие параметры изменить нельзя. Реакция - только на кнопку "стоп", при
-  нажатии на которою прибор переходит в режим СТОП. При достижении заданного
+  нажатии на которую прибор переходит в режим СТОП. При достижении заданного
   напряжения происходит переход в режим ПАУЗА.
 3. Режим ПАУЗА
   Меняются все параметры также, как в режиме СТОП, но вход в меню не разрешён.

@@ -27,7 +27,10 @@ gtch::cfg_t::cfg_t():
   m_adc(ADC3_BASE, irs::arm::st_adc_t::ADC3_PF8_CH6/*ADC1_BASE, irs::arm::st_adc_t::ADC123_PC0_CH10*/,
     irs::make_cnt_s(m_adc_settings.sampling_time)),
   #else // Плата ГТЧ
-  m_adc(IRS_ADC1_BASE, irs::arm::st_adc_t::ADC123_PA2_CH2,
+  /*m_adc(IRS_ADC1_BASE, irs::arm::st_adc_t::ADC123_PA2_CH2,
+    irs::make_cnt_s(m_adc_settings.sampling_time)),*/
+  m_adc(irs::arm::st_multi_adc_t::ADC123_PA1_CH1,
+    irs::arm::st_multi_adc_t::ADC123_PA2_CH2,
     irs::make_cnt_s(m_adc_settings.sampling_time)),
   #endif // Плата ГТЧ
   #if GTCH_SK_STM32F217

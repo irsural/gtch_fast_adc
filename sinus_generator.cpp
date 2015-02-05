@@ -312,3 +312,78 @@ void sinus_generator_t::apply_frequency()
   irs_u32 floor_len = irs_u32(float_floor_len);
   m_floor_len = (ceil_len - floor_len)/4;*/
 }
+
+// class dc_generator_t
+dc_generator_t::dc_generator_t(irs::pwm_gen_t* ap_pwm_gen, double a_dead_time):
+  m_max_value(0),
+  m_min_amplitude(0.f),
+  m_max_amplitude(1.f),
+  m_dead_time(a_dead_time),
+  m_started(false),
+  mp_pwm_gen(ap_pwm_gen),
+  m_amplitude(0.f)
+{
+}
+
+dc_generator_t::~dc_generator_t()
+{
+  mp_pwm_gen->stop();
+}
+
+void dc_generator_t::start()
+{
+  mp_pwm_gen->set_duty(static_cast<float>(m_amplitude));
+  mp_pwm_gen->start();
+  m_started = true;
+}
+
+void dc_generator_t::stop()
+{
+  mp_pwm_gen->stop();
+  m_started = false;
+}
+
+bool dc_generator_t::started() const
+{
+  return m_started;
+}
+
+void dc_generator_t::set_value(unsigned int /*a_value*/)
+{
+}
+
+void dc_generator_t::set_amplitude(double a_amplitude)
+{
+  m_amplitude = irs::bound(a_amplitude, m_min_amplitude, m_max_amplitude);
+  float duty = static_cast<float>(irs::bound(0.5-0.5*m_amplitude, 0.05, 0.5));
+  IRS_LIB_DBG_MSG("m_amplitude = " << duty);
+  mp_pwm_gen->set_duty(duty);
+}
+
+double dc_generator_t::get_amplitude()
+{
+  return m_amplitude;
+}
+
+void dc_generator_t::set_frequency(double /*a_frequency*/)
+{
+}
+
+unsigned int dc_generator_t::get_max_value()
+{
+  return m_max_value;
+}
+
+double dc_generator_t::get_max_amplitude()
+{
+  return m_max_amplitude;
+}
+
+double dc_generator_t::get_max_frequency()
+{
+  return 0;
+}
+
+void dc_generator_t::set_correct_freq_koef(double /*a_correct_koef*/)
+{
+}

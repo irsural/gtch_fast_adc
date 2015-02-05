@@ -34,7 +34,24 @@ private:
   gpio_channel_t m_second_channel;
 };
 
-class sinus_generator_t
+class generator_t
+{
+public:
+  virtual ~generator_t() {}
+  virtual void start() = 0;
+  virtual void stop() = 0;
+  virtual bool started() const = 0;
+  virtual void set_value(unsigned int a_value) = 0;
+  virtual void set_amplitude(double a_amplitude) = 0;
+  virtual double get_amplitude() = 0;
+  virtual void set_frequency(double a_frequency) = 0;
+  virtual unsigned int get_max_value() = 0;
+  virtual double get_max_amplitude() = 0;
+  virtual double get_max_frequency() = 0;
+  virtual void set_correct_freq_koef(double a_correct_koef) = 0;
+};
+
+class sinus_generator_t: public generator_t
 {
 public:
   typedef std::size_t size_type;
@@ -55,7 +72,7 @@ public:
   virtual unsigned int get_max_value();
   virtual double get_max_amplitude();
   virtual double get_max_frequency();
-  void set_correct_freq_koef(double a_correct_koef);
+  virtual void set_correct_freq_koef(double a_correct_koef);
 private:
   // Множитель, чтобы взять dead time с запасом
   enum { dead_time_count = 3 };
@@ -113,6 +130,38 @@ private:
   {
     return m_floor_interval;
   }
+};
+
+class dc_generator_t: public generator_t
+{
+public:
+  typedef std::size_t size_type;
+  typedef interrupt_generator_t::counter_type period_t;
+  typedef interrupt_generator_t::calc_type calc_period_t;
+  dc_generator_t(irs::pwm_gen_t* ap_pwm_gen, double a_dead_time);
+  ~dc_generator_t();
+  virtual void start();
+  virtual void stop();
+  virtual bool started() const;
+  virtual void set_value(unsigned int a_value);
+  virtual void set_amplitude(double a_amplitude);
+  virtual double get_amplitude();
+  virtual void set_frequency(double a_frequency);
+  virtual unsigned int get_max_value();
+  virtual double get_max_amplitude();
+  virtual double get_max_frequency();
+  virtual void set_correct_freq_koef(double a_correct_koef);
+private:
+  // Множитель, чтобы взять dead time с запасом
+  enum { dead_time_count = 3 };
+
+  const unsigned int m_max_value;
+  const double m_min_amplitude;
+  const double m_max_amplitude;
+  const double m_dead_time;
+  bool m_started;
+  irs::pwm_gen_t* mp_pwm_gen;
+  double m_amplitude;
 };
 
 #endif // sinus_generatorH

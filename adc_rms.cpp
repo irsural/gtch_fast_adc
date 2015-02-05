@@ -6,6 +6,188 @@
 
 #include <irsfinal.h>
 
+// class st_multi_adc_t
+irs::arm::st_multi_adc_t::st_multi_adc_t(adc_channel_t a_first_adc_channel,
+  adc_channel_t a_second_adc_channel,
+  counter_t a_adc_interval
+):
+  mp_adc(reinterpret_cast<adc_regs_t*>(size_t(IRS_ADC1_BASE))),
+  mp_adc2(reinterpret_cast<adc_regs_t*>(size_t(IRS_ADC2_BASE))),
+  m_adc_timer(a_adc_interval)
+{
+  clock_enable(size_t(IRS_ADC1_BASE));
+  clock_enable(size_t(IRS_ADC2_BASE));
+  mp_adc->ADC_SMPR1 = 0xFFFFFFFF;
+  mp_adc->ADC_SMPR2 = 0xFFFFFFFF;
+  mp_adc2->ADC_SMPR1 = 0xFFFFFFFF;
+  mp_adc2->ADC_SMPR2 = 0xFFFFFFFF;
+  // 3: PCLK2 divided by 8
+  ADC_CCR_bit.ADCPRE = 3;
+
+  vector<pair<adc_channel_t, gpio_channel_t> > adc_gpio_pairs;
+  adc_gpio_pairs.push_back(make_pair(ADC123_PA0_CH0, PA0));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PA1_CH1, PA1));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PA2_CH2, PA2));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PA3_CH3, PA3));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PA4_CH4, PA4));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF6_CH4, PF6));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PA5_CH5, PA5));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF7_CH5, PF7));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PA6_CH6, PA6));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF8_CH6, PF8));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PA7_CH7, PA7));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF9_CH7, PF9));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PB0_CH8, PB0));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF10_CH8, PF10));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PB1_CH9, PB1));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF3_CH9, PF3));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PC0_CH10, PC0));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PC1_CH11, PC1));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PC2_CH12, PC2));
+  adc_gpio_pairs.push_back(make_pair(ADC123_PC3_CH13, PC3));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PC4_CH14, PC4));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF4_CH14, PF4));
+  adc_gpio_pairs.push_back(make_pair(ADC12_PC5_CH15, PC5));
+  adc_gpio_pairs.push_back(make_pair(ADC3_PF5_CH15, PF5));
+
+  const irs_u32 selected_channels = a_first_adc_channel|a_second_adc_channel;
+
+  for (size_t i = 0; i < adc_gpio_pairs.size(); i++) {
+    adc_channel_t adc_channel = adc_gpio_pairs[i].first;
+    const select_channel_type adc_mask =
+      (ADC1_MASK | ADC2_MASK | ADC3_MASK) & adc_channel;
+    const select_channel_type channel_mask = static_cast<irs_u16>(adc_channel);
+    if ((selected_channels & channel_mask) &&
+      (selected_channels & adc_mask)) {
+      clock_enable(adc_gpio_pairs[i].second);
+      gpio_moder_analog_enable(adc_gpio_pairs[i].second);
+    }
+  }
+
+  mp_adc->ADC_CR2_bit.ADON = 1;
+  mp_adc2->ADC_CR2_bit.ADON = 1;
+
+  mp_adc->ADC_SQR1_bit.L = 0;
+  mp_adc2->ADC_SQR1_bit.L = 0;
+
+  mp_adc->ADC_SQR3_bit.SQ1 =
+    adc_channel_to_channel_index(a_first_adc_channel);
+  mp_adc2->ADC_SQR3_bit.SQ1 =
+    adc_channel_to_channel_index(a_second_adc_channel);
+
+  ADC_CCR_bit.MULTI = 6; // 00110: Regular simultaneous mode only
+  mp_adc->ADC_CR2_bit.SWSTART = 1;
+}
+
+irs_u32 irs::arm::st_multi_adc_t::adc_channel_to_channel_index(
+  adc_channel_t a_adc_channel)
+{
+  irs_u16 adc_channel = static_cast<irs_u16>(a_adc_channel);
+  for (size_t i = 0; i < reqular_channel_count; i++) {
+    if (adc_channel & 0x1) {
+      return i;
+    }
+    adc_channel >>= 1;
+  }
+  IRS_LIB_ERROR(ec_standard, "Канал не выбран");
+  return 0;
+}
+
+irs::arm::st_multi_adc_t::~st_multi_adc_t()
+{
+  mp_adc->ADC_CR2_bit.ADON = 0;
+  mp_adc2->ADC_CR2_bit.ADON = 0;
+}
+
+irs::arm::st_multi_adc_t::size_type
+irs::arm::st_multi_adc_t::get_resulution() const
+{
+  return adc_resolution;
+}
+
+irs_u16 irs::arm::st_multi_adc_t::get_u16_minimum()
+{
+  return static_cast<irs_u16>(
+    static_cast<irs_i16>((adc_max_value)*-1) << (16 - adc_resolution));
+}
+
+irs_u16 irs::arm::st_multi_adc_t::get_u16_maximum()
+{
+  return static_cast<irs_u16>(
+    static_cast<irs_i16>(adc_max_value) << (16 - adc_resolution));
+}
+
+irs_u16 irs::arm::st_multi_adc_t::get_u16_data(irs_u8 a_channel)
+{
+  return static_cast<irs_u16>(m_value << (16 - adc_resolution));
+}
+
+irs_u32 irs::arm::st_multi_adc_t::get_u32_minimum()
+{
+  return static_cast<irs_u32>(
+    static_cast<irs_i32>((adc_max_value)*-1) << (32 - adc_resolution));
+}
+
+irs_u32 irs::arm::st_multi_adc_t::get_u32_maximum()
+{
+  return static_cast<irs_u32>(
+    static_cast<irs_i32>(adc_max_value) << (32 - adc_resolution));
+}
+
+irs_u32 irs::arm::st_multi_adc_t::get_u32_data(irs_u8 a_channel)
+{
+  return m_value << (32 - adc_resolution);
+}
+
+float irs::arm::st_multi_adc_t::get_float_minimum()
+{
+  return -1.f;
+}
+
+float irs::arm::st_multi_adc_t::get_float_maximum()
+{
+  return 1.f;
+}
+
+float irs::arm::st_multi_adc_t::get_float_data(irs_u8 a_channel)
+{
+  return static_cast<float>(m_value)/adc_max_value;
+}
+
+float irs::arm::st_multi_adc_t::get_temperature()
+{
+  return 0;
+}
+
+float irs::arm::st_multi_adc_t::get_v_battery()
+{
+  return 0;
+}
+
+float irs::arm::st_multi_adc_t::get_temperature_degree_celsius(
+  const float a_vref)
+{
+  return 0;
+}
+
+void irs::arm::st_multi_adc_t::tick()
+{
+  const bool timer_check = m_adc_timer.check();
+  if (timer_check) {
+    bool eoc1 = ADC_CSR_bit.EOC1;
+    if (eoc1 == 1) {
+      mp_adc->ADC_SR_bit.EOC = 0;
+      mp_adc2->ADC_SR_bit.EOC = 0;
+      /*m_regular_channels_values[m_current_channel] =
+        static_cast<irs_u16>(mp_adc->ADC_DR);*/
+      irs_i16 data1 = static_cast<irs_i16>(mp_adc->ADC_DR);
+      irs_i16 data2 = static_cast<irs_i16>(mp_adc2->ADC_DR);
+      m_value = static_cast<irs_u16>(data1 - data2);
+      mp_adc->ADC_CR2_bit.SWSTART = 1;
+    }
+  }
+}
+
 // class adc_rms_t
 gtch::adc_rms_t::adc_rms_t(
   irs::arm::arm_spi_t* ap_spi,
@@ -377,16 +559,16 @@ void gtch::adc_rms_t::tick()
     }
     static int count = 0;
     const int max_count = 3;
-    static std::vector<irs_u16> buf(m_period_sample_count*max_count, 0);
+    static std::vector<sample_type> buf(m_period_sample_count*max_count, 0);
     static int buf_index = 0;
     if (m_sko_calc.size() == 0) {
       for (size_type i = m_processed_index; i < index_end; i++) {
-        const irs_u16 sample = m_buf[i];
+        const sample_type sample = m_buf[i];
         m_sko_calc.add_to_average(sample);
       }
     }
     for (size_type i = m_processed_index; i < index_end; i++) {
-      const irs_u16 sample = m_buf[i];
+      const sample_type sample = m_buf[i];
       m_sko_calc.add(sample);
       if (m_show_sinus) {
         buf.at(buf_index) = sample;
@@ -456,8 +638,9 @@ void gtch::adc_rms_t::adc_read_event_t::exec()
 
       irs::timer_t timeout(irs::make_cnt_ms(1));
 
-      irs_u16 value = mp_adc_rms->mp_adc->get_u16_data(
-        mp_adc_rms->m_adc_channel);
+      sample_type value = static_cast<sample_type>(
+        mp_adc_rms->mp_adc->get_u16_data(
+        mp_adc_rms->m_adc_channel));
 
       mp_adc_rms->m_buf[mp_adc_rms->m_interrupt_index] = value;
        mp_adc_rms->m_interrupt_index++;

@@ -12,7 +12,83 @@
 
 #include <irsfinal.h>
 
+namespace irs {
+
+namespace arm {
+
+class st_multi_adc_t: public adc_t
+{
+private:
+  enum {
+    ADC1_MASK = 1 << 30,
+    ADC2_MASK = 1 << 29,
+    ADC3_MASK = 1 << 28
+  };
+public:
+  enum adc_channel_t {
+    ADC123_PA0_CH0 = (1 << 0) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PA1_CH1 = (1 << 1) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PA2_CH2 = (1 << 2) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PA3_CH3 = (1 << 3) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC12_PA4_CH4 = (1 << 4) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF6_CH4 = (1 << 4) | ADC3_MASK,
+    ADC12_PA5_CH5 = (1 << 5) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF7_CH5 = (1 << 5) | ADC3_MASK,
+    ADC12_PA6_CH6 = (1 << 6) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF8_CH6 = (1 << 6) | ADC3_MASK,
+    ADC12_PA7_CH7 = (1 << 7) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF9_CH7 = (1 << 7) | ADC3_MASK,
+    ADC12_PB0_CH8 = (1 << 8) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF10_CH8 = (1 << 8) | ADC3_MASK,
+    ADC12_PB1_CH9 = (1 << 9) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF3_CH9 = (1 << 9) | ADC3_MASK,
+    ADC123_PC0_CH10 = (1 << 10) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PC1_CH11 = (1 << 11) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PC2_CH12 = (1 << 12) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC123_PC3_CH13 = (1 << 13) | ADC1_MASK | ADC2_MASK | ADC3_MASK,
+    ADC12_PC4_CH14 = (1 << 14) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF4_CH14 = (1 << 14) | ADC3_MASK,
+    ADC12_PC5_CH15 = (1 << 15) | ADC1_MASK | ADC2_MASK,
+    ADC3_PF5_CH15 = (1 << 15) | ADC3_MASK,
+    ADC1_TEMPERATURE = (1 << 16) | ADC1_MASK,
+    ADC1_V_BATTERY = (1 << 18) | ADC1_MASK
+  };
+  st_multi_adc_t(adc_channel_t a_first_adc_channel,
+    adc_channel_t a_second_adc_channel,
+    counter_t a_adc_interval = make_cnt_ms(100));
+  virtual ~st_multi_adc_t();
+  virtual size_type get_resulution() const;
+  virtual irs_u16 get_u16_minimum();
+  virtual irs_u16 get_u16_maximum();
+  virtual irs_u16 get_u16_data(irs_u8 a_channel);
+  virtual irs_u32 get_u32_minimum();
+  virtual irs_u32 get_u32_maximum();
+  virtual irs_u32 get_u32_data(irs_u8 a_channel);
+  virtual float get_float_minimum();
+  virtual float get_float_maximum();
+  virtual float get_float_data(irs_u8 a_channel);
+  virtual float get_temperature();
+  virtual float get_v_battery();
+  virtual void tick();
+  float get_temperature_degree_celsius(const float a_vref);
+private:
+  irs_u32 adc_channel_to_channel_index(adc_channel_t a_adc_channel);
+  adc_regs_t* mp_adc;
+  adc_regs_t* mp_adc2;
+  irs::loop_timer_t m_adc_timer;
+  enum { reqular_channel_count = 16 };
+  enum { adc_resolution = 13 };
+  enum { adc_max_value = 0xFFF };
+  irs_u32 m_value;
+};
+
+}
+
+}
+
 namespace gtch {
+
+
 
 class adc_rms_t
 {
@@ -116,13 +192,14 @@ private:
   size_type m_result_sko_point_count;
   size_type m_delta_point_count;
   double m_conversion_factor;
-  std::vector<irs_u16> m_buf;
+  typedef irs_i16 sample_type;
+  std::vector<sample_type> m_buf;
   size_type m_interrupt_index;
   size_type m_interrupt_count;
   size_type m_processed_index;
   adc_read_event_t m_adc_read_event;
   interrupt_generator_t* mp_interrupt_generator;
-  irs::fast_multi_sko_with_single_average_t<irs_u16, double> m_sko_calc;
+  irs::fast_multi_sko_with_single_average_t<sample_type, double> m_sko_calc;
   //const size_type m_samples_max_size;
   //irs::deque_data_t<irs_u16> m_samples;
   //irs::delta_calc_t<double> m_delta_calc;
