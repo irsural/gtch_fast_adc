@@ -1153,7 +1153,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reg_timer(m_meas_interval),
   m_rate_data(),
   m_meas_k(0.f),
-  m_meas_k_default(1./130.),
+  m_meas_k_default(1./220.),
   m_min_meas_k_voltage(5.f),
   m_reg_koefs_changed(false),
   m_can_reg(true),
@@ -1517,8 +1517,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_adc_fade_data.t = m_t_adc /m_filter_update_interval;
   //  Регульятор
   m_reg_pd.k = m_k;
-  m_reg_pd.ki = m_ki;
-  m_reg_pd.kd = m_kd;
+  //m_reg_pd.ki = m_ki;
+  m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_reg_interval);
+  //m_reg_pd.kd = m_kd;
+  m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_reg_interval);
   m_reg_pd.min = m_meas_gen_value;
   m_reg_pd.max = mp_generator->get_max_amplitude();
   m_reg_pd.prev_e = 0.;
@@ -2115,9 +2117,12 @@ void app_t<CFG>::to_start()
   mp_generator->set_amplitude(m_meas_gen_value);
   mp_generator->start();
   m_overcurrent_detection_enabled = true;
-  m_reg_timer.set(m_meas_interval);
+  /*m_reg_timer.set(m_meas_interval);
   m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
-  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);
+  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);*/
+  m_reg_timer.set(m_reg_interval);
+  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
+  m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
   m_reg_timer.start();
 }
 
@@ -2374,10 +2379,12 @@ void app_t<CFG>::in_tick()
       static_cast<irs_u32>(m_current_limit*m_trans_koef));
   }
   if (m_trans_ki_event.check()) {
-    m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_meas_interval);
+    //m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_meas_interval);
+    m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_reg_interval);
   }
   if (m_trans_kd_event.check()) {
-    m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_meas_interval);
+    //m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_meas_interval);
+    m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_reg_interval);
   }
   if (m_trans_t_adc_event.check()) {
     m_adc_fade_data.t = m_t_adc/m_filter_update_interval;
@@ -2387,7 +2394,8 @@ void app_t<CFG>::in_tick()
     m_iso_data.k = m_iso_k;
   }
   if (m_trans_iso_t_event.check()) {
-    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
+    //m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
+    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
   }
   if (m_id_pass_event.check()) {
     irs_u16 id_pass = static_cast<irs_u16>(m_id_pass);
@@ -3277,9 +3285,10 @@ template <class CFG>
 void app_t<CFG>::reg()
 {
   if (m_reg_timer.check()) {
-    m_reg_timer.set(m_reg_interval);
+    m_reg_timer.start();
+    /*m_reg_timer.set(m_reg_interval);
     m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
-    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
+    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
     if (m_can_reg) {
       const double cur_voltage_ref =
         irs::rate_limiter(&m_rate_data, m_voltage_ref);
@@ -3306,9 +3315,10 @@ template <class CFG>
 void app_t<CFG>::reg_with_meas()
 {
   if (m_reg_timer.check()) {
-    m_reg_timer.set(m_reg_interval);
+    m_reg_timer.start();
+    /*m_reg_timer.set(m_reg_interval);
     m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
-    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
+    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
     if (!m_need_meas_koef || m_voltage < m_min_meas_k_voltage) {
       m_meas_k = m_meas_k_default;
     } else {

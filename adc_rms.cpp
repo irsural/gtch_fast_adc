@@ -296,7 +296,10 @@ void gtch::adc_rms_t::set_current_type(current_type_t a_type)
   if (m_current_type == current_type_ac) {
     m_sko_calc.resize_average(m_period_sample_count*m_average_period_count);
   } else {
-    m_sko_calc.resize_average(0);
+    //m_sko_calc.resize_average(0);
+    m_sko_calc.resize_average(
+      m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
+
   }
   reset();
 }
@@ -602,7 +605,7 @@ void gtch::adc_rms_t::tick()
 
     const bool sko_add = m_sko_timer.check();
     const bool delta_add = m_delta_timer.check();
-    /*if (m_current_type == current_type_dc) {
+    if (m_current_type == current_type_dc) {
       for (size_type i = 0; i < m_results.size(); i++) {
         m_results[i].value = m_sko_calc.average();
       }
@@ -610,10 +613,10 @@ void gtch::adc_rms_t::tick()
       for (size_type i = 0; i < m_results.size(); i++) {
         m_results[i].value = m_sko_calc.get(i);
       }
-    }*/
-    for (size_type i = 0; i < m_results.size(); i++) {
-      m_results[i].value = m_sko_calc.get(i);
     }
+    /*for (size_type i = 0; i < m_results.size(); i++) {
+      m_results[i].value = m_sko_calc.get(i);
+    }*/
     for (size_type i = 0; i < m_results.size(); i++) {
       if (sko_add) {
         m_results[i].sko.add(m_results[i].value);
