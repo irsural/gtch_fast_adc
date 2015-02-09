@@ -74,6 +74,7 @@ public:
   virtual double get_max_frequency();
   virtual void set_correct_freq_koef(double a_correct_koef);
 private:
+  void set_duty_from_sinus(size_type a_sample_index);
   // Множитель, чтобы взять dead time с запасом
   enum { dead_time_count = 3 };
   class point_interrupt_event_t: public irs::event_t
@@ -112,7 +113,6 @@ private:
   irs_u16 m_current_point;
   size_type m_interrupt_count;
   period_t m_floor_interval;
-  //irs_u8 m_floor_len;
   size_type m_sinus_size;
   std::vector<double> m_ref_sinus;
   std::vector<irs_i16> m_sinus_array_1;
@@ -123,7 +123,6 @@ private:
   double m_default_freq_trans_koef;
 
   void point_interrupt();
-  //void fill_sinus_array();
   void fill_sinus_array(std::vector<irs_i16>* ap_array);
   void apply_frequency();
   inline period_t get_interval()
@@ -152,6 +151,7 @@ public:
   virtual double get_max_frequency();
   virtual void set_correct_freq_koef(double a_correct_koef);
 private:
+  void set_duty_from_amplitude(float a_amplitude);
   // Множитель, чтобы взять dead time с запасом
   enum { dead_time_count = 3 };
 

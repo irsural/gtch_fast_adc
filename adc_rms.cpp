@@ -293,6 +293,11 @@ void gtch::adc_rms_t::select_channels(irs_u32 a_selected_channels)
 void gtch::adc_rms_t::set_current_type(current_type_t a_type)
 {
   m_current_type = a_type;
+  if (m_current_type == current_type_ac) {
+    m_sko_calc.resize_average(m_period_sample_count*m_average_period_count);
+  } else {
+    m_sko_calc.resize_average(0);
+  }
   reset();
 }
 
@@ -561,10 +566,12 @@ void gtch::adc_rms_t::tick()
     const int max_count = 3;
     static std::vector<sample_type> buf(m_period_sample_count*max_count, 0);
     static int buf_index = 0;
-    if (m_sko_calc.size() == 0) {
-      for (size_type i = m_processed_index; i < index_end; i++) {
-        const sample_type sample = m_buf[i];
-        m_sko_calc.add_to_average(sample);
+    if (m_current_type == current_type_ac) {
+      if (m_sko_calc.size() == 0) {
+        for (size_type i = m_processed_index; i < index_end; i++) {
+          const sample_type sample = m_buf[i];
+          m_sko_calc.add_to_average(sample);
+        }
       }
     }
     for (size_type i = m_processed_index; i < index_end; i++) {
@@ -595,7 +602,7 @@ void gtch::adc_rms_t::tick()
 
     const bool sko_add = m_sko_timer.check();
     const bool delta_add = m_delta_timer.check();
-    if (m_current_type == current_type_dc) {
+    /*if (m_current_type == current_type_dc) {
       for (size_type i = 0; i < m_results.size(); i++) {
         m_results[i].value = m_sko_calc.average();
       }
@@ -603,6 +610,9 @@ void gtch::adc_rms_t::tick()
       for (size_type i = 0; i < m_results.size(); i++) {
         m_results[i].value = m_sko_calc.get(i);
       }
+    }*/
+    for (size_type i = 0; i < m_results.size(); i++) {
+      m_results[i].value = m_sko_calc.get(i);
     }
     for (size_type i = 0; i < m_results.size(); i++) {
       if (sko_add) {

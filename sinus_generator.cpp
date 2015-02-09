@@ -44,21 +44,6 @@ void st_pwm_gen_adapter_t::stop()
 
 void st_pwm_gen_adapter_t::set_duty(irs_uarc a_duty)
 {
-  /*static int status = 0;
-  static  bool status_2 = false;
-  if (status%128 == 0) {
-    if (status_2) {
-      irs::arm::io_pin_t error_led(GPIO_PORTE, 14, irs::io_t::dir_out,
-        irs::io_pin_off);
-    } else {
-      irs::arm::io_pin_t error_led(GPIO_PORTE, 14, irs::io_t::dir_out,
-        irs::io_pin_on);
-    }
-    status_2 = !status_2;
-  }
-  status ++;
-  */
-
   mp_st_pwm_gen->set_duty(m_first_channel, a_duty);
   mp_st_pwm_gen->set_duty(m_second_channel, get_max_duty() - a_duty);
 }
@@ -149,7 +134,6 @@ interrupt_generator_t* ap_interrupt_generator,
   m_current_point(0),
   m_interrupt_count(0),
   m_floor_interval(0),
-  //m_floor_len(0),
   m_sinus_size(a_sinus_size),
   m_ref_sinus(m_sinus_size, 0),
   m_sinus_array_1(m_sinus_size, 0),
@@ -185,10 +169,17 @@ sinus_generator_t::~sinus_generator_t()
 void sinus_generator_t::start()
 {
   m_current_point = 0;
-  mp_pwm_gen->set_duty(irs_uarc((*mp_active_sinus_array)[0]));
+  set_duty_from_sinus(0);
   mp_pwm_gen->start();
   m_point_interrupt_event.enable();
   m_started = true;
+}
+
+void sinus_generator_t::set_duty_from_sinus(size_type a_sample_index)
+{
+  const irs_uarc duty = irs_uarc(irs_i16(mp_pwm_gen->get_max_duty()/2) +
+    irs_i16((*mp_active_sinus_array)[a_sample_index]));
+  mp_pwm_gen->set_duty(duty);
 }
 
 void sinus_generator_t::stop()
@@ -273,26 +264,14 @@ void sinus_generator_t::point_interrupt()
         ((m_current_point == 0) || (m_current_point == m_sinus_size/2))) {
       std::swap(mp_active_sinus_array, mp_inactive_sinus_array);
 
-      /*if (mp_active_sinus_array == m_sinus_array_1) {
-        mp_active_sinus_array = m_sinus_array_2;
-      } else {
-        mp_active_sinus_array = m_sinus_array_1;
-      }*/
       m_amplitude_changed = false;
     }
-    const irs_uarc duty = irs_uarc(irs_i16(mp_pwm_gen->get_max_duty()/2) +
-      irs_i16((*mp_active_sinus_array)[m_current_point++]));
-    mp_pwm_gen->set_duty(duty);
+    set_duty_from_sinus(m_current_point++);
     if (m_current_point >= m_sinus_size) {
       m_current_point = 0;
     }
   }
 }
-
-/*void sinus_generator_t::fill_sinus_array()
-{
-  fill_sinus_array(&m_sinus_array);
-}*/
 
 void sinus_generator_t::fill_sinus_array(std::vector<irs_i16>* ap_array)
 {
@@ -308,9 +287,6 @@ void sinus_generator_t::apply_frequency()
   double period = float_floor_len/double(m_sinus_size);
   period /= m_interrupt_freq_boost_factor;
   m_floor_interval = period_t(period);
-  /*irs_u32 ceil_len = irs_u32(m_sinus_size)*irs_u32(m_floor_interval + 1);
-  irs_u32 floor_len = irs_u32(float_floor_len);
-  m_floor_len = (ceil_len - floor_len)/4;*/
 }
 
 // class dc_generator_t
@@ -332,9 +308,17 @@ dc_generator_t::~dc_generator_t()
 
 void dc_generator_t::start()
 {
-  mp_pwm_gen->set_duty(static_cast<float>(m_amplitude));
+  set_duty_from_amplitude(0);
   mp_pwm_gen->start();
   m_started = true;
+}
+
+void dc_generator_t::set_duty_from_amplitude(float a_amplitude)
+{
+  //float duty = static_cast<float>(irs::bound(0.5-0.5*a_amplitude, 0.05, 0.5));
+  float duty = static_cast<float>(irs::bound(0.5 + 0.5*a_amplitude, 0.5, 1.));
+  IRS_LIB_DBG_MSG(static_cast<irs_u32>(duty*mp_pwm_gen->get_max_duty()));
+  mp_pwm_gen->set_duty(duty);
 }
 
 void dc_generator_t::stop()
@@ -355,9 +339,8 @@ void dc_generator_t::set_value(unsigned int /*a_value*/)
 void dc_generator_t::set_amplitude(double a_amplitude)
 {
   m_amplitude = irs::bound(a_amplitude, m_min_amplitude, m_max_amplitude);
-  float duty = static_cast<float>(irs::bound(0.5-0.5*m_amplitude, 0.05, 0.5));
-  IRS_LIB_DBG_MSG("m_amplitude = " << duty);
-  mp_pwm_gen->set_duty(duty);
+  //IRS_LIB_DBG_MSG("m_amplitude = " << m_amplitude);
+  set_duty_from_amplitude(m_amplitude);
 }
 
 double dc_generator_t::get_amplitude()

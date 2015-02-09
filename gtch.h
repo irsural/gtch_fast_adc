@@ -771,6 +771,7 @@ class app_t
   bool m_operating_duty;
   irs::timer_t m_reg_timer;
   irs::pid_data_t m_reg_pd;
+  irs::rate_limiter_t<double> m_rate_data;
   float m_meas_k;
   const float m_meas_k_default;
   const float m_min_meas_k_voltage;
@@ -1150,6 +1151,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_operating_duty_deviation(0.03f),
   m_operating_duty(false),
   m_reg_timer(m_meas_interval),
+  m_rate_data(),
   m_meas_k(0.f),
   m_meas_k_default(1./130.),
   m_min_meas_k_voltage(5.f),
@@ -1526,6 +1528,15 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reg_pd.block_int_ext = 0;
   m_reg_pd.int_val = 0.;
   m_reg_pd.k_d_pid = 0.1;
+
+  m_rate_data.cur = 0;
+  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);
+  m_rate_data.slope = 300;
+  m_rate_data.recalc = 0;
+  m_rate_data.dl = 0;
+  m_rate_data.slope_prev = 0;
+  m_rate_data.dt_prev = 0;
+
   //  Меню
   memset(mp_user_str, ' ', m_user_str_len);
   mp_user_str[m_user_str_len] = '\0';
@@ -1652,7 +1663,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_k_item.set_min_value(0.0);
   m_k_item.add_change_event(&m_trans_k_nonv_event);
   m_k_item.set_key_type(IMK_ARROWS);
-  m_k_item.set_change_step(0.05f);
+  m_k_item.set_change_step(0.01f);
   //  Кi
   m_ki_item.set_header("Инт. коэф.");
   m_ki_item.set_message(mp_exit_msg);
@@ -1663,7 +1674,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_ki_item.add_change_event(&m_trans_ki_event);
   m_ki_item.add_change_event(&m_trans_ki_nonv_event);
   m_ki_item.set_key_type(IMK_ARROWS);
-  m_ki_item.set_change_step(0.05f);
+  m_ki_item.set_change_step(0.01f);
   //  Кd
   m_kd_item.set_header("Диф. коэф");
   m_kd_item.set_message(mp_exit_msg);
@@ -1674,7 +1685,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_kd_item.add_change_event(&m_trans_kd_event);
   m_kd_item.add_change_event(&m_trans_kd_nonv_event);
   m_kd_item.set_key_type(IMK_ARROWS);
-  m_kd_item.set_change_step(0.05f);
+  m_kd_item.set_change_step(0.01f);
   //  Переизмерение коэффициентов
   m_need_meas_koef_item.set_header("Изм. коэф.");
   m_need_meas_koef_item.set_str("Включено", "Выключено");
@@ -1722,7 +1733,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_dead_band_item.set_message(mp_exit_msg);
   m_dead_band_item.set_str(mp_user_str, "V", "%",
     m_menu_item_width, m_menu_item_prec);
-  m_dead_band_item.set_max_value(1.0);
+  m_dead_band_item.set_max_value(10.0);
   m_dead_band_item.set_min_value(0.0);
   m_dead_band_item.set_key_type(IMK_ARROWS);
   m_dead_band_item.set_change_step(0.05f);
@@ -2054,7 +2065,7 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
   //const float experimental_factor = 43.07247;
   const float experimental_factor = 122.995831;
   float a = static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum());
-  IRS_LIB_DBG_MSG("A = " << a);
+  //IRS_LIB_DBG_MSG("A = " << a);
   const float k = experimental_factor*
     (m_adc_settings.v_reference/
      static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum()));
@@ -2092,14 +2103,21 @@ void app_t<CFG>::to_stop()
 template <class CFG>
 void app_t<CFG>::to_start()
 {
+  m_rate_data.cur = m_voltage;
+  const double cur_voltage_ref =
+    irs::rate_limiter(&m_rate_data, m_voltage_ref);
+
   m_meas_k = m_meas_k_default;
   m_reg_pd.k = m_k * m_meas_k;
-  float e = m_voltage_ref - m_voltage;
+  //float e = m_voltage_ref - m_voltage;
+  float e = cur_voltage_ref - m_voltage;
   pid_reg_sync(&m_reg_pd, e, m_meas_gen_value);
   mp_generator->set_amplitude(m_meas_gen_value);
   mp_generator->start();
   m_overcurrent_detection_enabled = true;
   m_reg_timer.set(m_meas_interval);
+  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
+  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);
   m_reg_timer.start();
 }
 
@@ -3079,7 +3097,7 @@ void app_t<CFG>::out_tick()
   if (m_filter_update_interval_timer.check()) {
     //m_adc_value = m_adc_filter.get_value();
     m_adc_value = fabs(m_fast_adc_rms.get_slow_adc_voltage_code());
-    IRS_LIB_DBG_MSG("m_adc_value = " << m_adc_value);
+    //IRS_LIB_DBG_MSG("m_adc_value = " << m_adc_value);
     m_voltage = adc_to_voltage(m_adc_value);
     //m_voltage = 9;
     if (m_voltage_filter_on) {
@@ -3260,8 +3278,13 @@ void app_t<CFG>::reg()
 {
   if (m_reg_timer.check()) {
     m_reg_timer.set(m_reg_interval);
+    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
+    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
     if (m_can_reg) {
-      const float e = m_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
+      const double cur_voltage_ref =
+        irs::rate_limiter(&m_rate_data, m_voltage_ref);
+
+      const float e = cur_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
       bool exec_reg = true;
       if (m_interface_mode == DEBUG) {
         exec_reg = (m_voltage_ref != 0);
@@ -3284,6 +3307,8 @@ void app_t<CFG>::reg_with_meas()
 {
   if (m_reg_timer.check()) {
     m_reg_timer.set(m_reg_interval);
+    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
+    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
     if (!m_need_meas_koef || m_voltage < m_min_meas_k_voltage) {
       m_meas_k = m_meas_k_default;
     } else {
@@ -3293,7 +3318,10 @@ void app_t<CFG>::reg_with_meas()
     m_reg_pd.k = m_k * m_meas_k;
     pid_reg_sync(&m_reg_pd);
     if (m_can_reg) {
-      float e = m_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
+      const double cur_voltage_ref =
+        irs::rate_limiter(&m_rate_data, m_voltage_ref);
+      //IRS_LIB_DBG_MSG("cur_voltage_ref = " << cur_voltage_ref);
+      float e = cur_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
       mp_generator->set_amplitude(pid_reg(&m_reg_pd, e));
     }
 
