@@ -186,7 +186,6 @@ private:
   current_type_t m_current_type;
   size_type m_downsampling_factor;
   size_type m_period_sample_count;
-  //size_type m_sko_period_count;
   std::vector<size_type> m_windows_sko_period_count;
   size_type m_average_period_count;
   size_type m_result_sko_point_count;
@@ -200,10 +199,6 @@ private:
   adc_read_event_t m_adc_read_event;
   interrupt_generator_t* mp_interrupt_generator;
   irs::fast_multi_sko_with_single_average_t<sample_type, double> m_sko_calc;
-  //const size_type m_samples_max_size;
-  //irs::deque_data_t<irs_u16> m_samples;
-  //irs::delta_calc_t<double> m_delta_calc;
-  //double m_result;
   irs::loop_timer_t m_sko_timer;
   irs::loop_timer_t m_delta_timer;
   struct result_t
@@ -219,7 +214,6 @@ private:
     }
   };
   vector<result_t> m_results;
-  //irs::fade_data_t m_adc_fade_data;
   double m_result_fade;
   bool m_show_sinus;
 };

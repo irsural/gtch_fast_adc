@@ -290,15 +290,35 @@ void sinus_generator_t::apply_frequency()
 }
 
 // class dc_generator_t
-dc_generator_t::dc_generator_t(irs::pwm_gen_t* ap_pwm_gen, double a_dead_time):
+dc_generator_t::dc_generator_t(
+  interrupt_generator_t* ap_interrupt_generator,
+  size_type a_interrupt_freq_boost_factor,
+  irs::pwm_gen_t* ap_pwm_gen, double a_dead_time,
+  size_type a_sinus_size
+):
   m_max_value(0),
   m_min_amplitude(0.f),
   m_max_amplitude(1.f),
   m_dead_time(a_dead_time),
   m_started(false),
   mp_pwm_gen(ap_pwm_gen),
-  m_amplitude(0.f)
+  m_amplitude(0.f),
+  m_frequency(50.),
+  m_floor_interval()
+  /*mp_interrupt_generator(ap_interrupt_generator),
+  m_interrupt_freq_boost_factor(a_interrupt_freq_boost_factor),*/
 {
+  calc_period_t num = 0;
+  calc_period_t denom = 1;
+  ap_interrupt_generator->get_converting_koefs(&num, &denom);
+  double freq_trans_koef = double(num)/double(denom);
+
+  const double float_floor_len = freq_trans_koef/m_frequency;
+  double period = float_floor_len/double(a_sinus_size);
+  period /= a_interrupt_freq_boost_factor;
+  period_t floor_interval = period_t(period);
+  ap_interrupt_generator->set_interval(floor_interval-1);
+
 }
 
 dc_generator_t::~dc_generator_t()

@@ -119,3 +119,132 @@ irs::string_t gtch::align_center(const irs::string_t a_str,
   }
   return str;
 }
+
+// reg_options_t
+gtch::reg_options_t::reg_options_t(char* ap_user_str, char* ap_exit_msg,
+  size_type a_menu_item_width, size_type a_menu_item_prec
+):
+  k(0.f),
+  k_item(&k, CAN_WRITE),
+  //  Кi
+  ki(0.f),
+  ki_item(&ki, CAN_WRITE),
+  //  Кd
+  kd(0.f),
+  kd_item(&kd, CAN_WRITE),
+  //
+  can_edit(true),
+  //  Переизмерение коэффициентов
+  need_meas_koef(false),
+  need_meas_koef_item((irs_bool*)&need_meas_koef, can_edit),
+  //  Постоянная фильтра АЦП
+  t_adc(0.),
+  t_adc_item(&t_adc, CAN_WRITE),
+  voltage_filter_on(false),
+  //  Изодромное звено: К
+  iso_k(0.),
+  iso_k_item(&iso_k, CAN_WRITE),
+  //  Изодромное звено: Т
+  iso_t(0.),
+  iso_t_item(&iso_t, CAN_WRITE),
+  // Зона нечувствительности
+  dead_band(0.),
+  dead_band_item(&dead_band, CAN_WRITE)
+{
+  //  К
+  k_item.set_header("Проп. коэф.");
+  k_item.set_message(ap_exit_msg);
+  k_item.set_str(ap_user_str, "Кп", "",
+    a_menu_item_width, a_menu_item_prec);
+  k_item.set_max_value(1000.0);
+  k_item.set_min_value(0.0);
+  //k_item.add_change_event(&m_trans_k_nonv_event);
+  k_item.set_key_type(IMK_ARROWS);
+  k_item.set_change_step(0.01f);
+  k_item.set_change_step_max(100.f);
+  k_item.progressive_change_enabled(true);
+  //  Кi
+  ki_item.set_header("Инт. коэф.");
+  ki_item.set_message(ap_exit_msg);
+  ki_item.set_str(ap_user_str, "Кi", "c-1",
+    a_menu_item_width, a_menu_item_prec);
+  ki_item.set_max_value(1000.0);
+  ki_item.set_min_value(0.0);
+  //ki_item.add_change_event(&m_trans_ki_event);
+  //ki_item.add_change_event(&m_trans_ki_nonv_event);
+  ki_item.set_key_type(IMK_ARROWS);
+  ki_item.set_change_step(0.01f);
+  ki_item.set_change_step_max(100.f);
+  ki_item.progressive_change_enabled(true);
+  //  Кd
+  kd_item.set_header("Диф. коэф");
+  kd_item.set_message(ap_exit_msg);
+  kd_item.set_str(ap_user_str, "Кd", "c",
+    a_menu_item_width, a_menu_item_prec);
+  kd_item.set_max_value(1000.0);
+  kd_item.set_min_value(0.0);
+  //kd_item.add_change_event(&m_trans_kd_event);
+  //kd_item.add_change_event(&m_trans_kd_nonv_event);
+  kd_item.set_key_type(IMK_ARROWS);
+  kd_item.set_change_step(0.01f);
+  kd_item.set_change_step_max(100.f);
+  kd_item.progressive_change_enabled(true);
+  //  Переизмерение коэффициентов
+  need_meas_koef_item.set_header("Изм. коэф.");
+  need_meas_koef_item.set_str("Включено", "Выключено");
+  //need_meas_koef_item.add_change_event(&m_trans_need_meas_koef_nonv_event);
+  //  Постоянная фильтра АЦП
+  t_adc_item.set_header("Пост. фильтра напр.");
+  t_adc_item.set_message(ap_exit_msg);
+  t_adc_item.set_str(ap_user_str, "T ", "с",
+    a_menu_item_width, a_menu_item_prec);
+  t_adc_item.set_max_value(20.0);
+  t_adc_item.set_min_value(0.0);
+  t_adc_item.set_key_type(IMK_ARROWS);
+  t_adc_item.set_change_step(0.01f);
+  t_adc_item.set_change_step_max(1.f);
+  t_adc_item.progressive_change_enabled(true);
+  //t_adc_item.add_change_event(&m_trans_t_adc_event);
+  //t_adc_item.add_change_event(&m_trans_t_adc_nonv_event);
+
+  //  Изодромное звено: К
+  iso_k_item.set_header("Изодр. коэф.");
+  iso_k_item.set_message(ap_exit_msg);
+  iso_k_item.set_str(ap_user_str, "Киз", "",
+    a_menu_item_width, a_menu_item_prec);
+  iso_k_item.set_max_value(1000.0);
+  iso_k_item.set_min_value(0.);
+  iso_k_item.set_key_type(IMK_ARROWS);
+  iso_k_item.set_change_step(0.01f);
+  iso_k_item.set_change_step_max(100.f);
+  iso_k_item.progressive_change_enabled(true);
+  //iso_k_item.add_change_event(&m_trans_iso_k_event);
+  //iso_k_item.add_change_event(&m_trans_iso_k_nonv_event);
+  //  Изодромное звено: Т
+  iso_t_item.set_header("Изодр. пост. вр.");
+  iso_t_item.set_message(ap_exit_msg);
+  iso_t_item.set_str(ap_user_str, "Тиз", "с",
+    a_menu_item_width, a_menu_item_prec);
+  iso_t_item.set_max_value(1000.0);
+  iso_t_item.set_min_value(0.0);
+  iso_t_item.set_key_type(IMK_ARROWS);
+  iso_t_item.set_change_step(0.01f);
+  iso_t_item.set_change_step_max(100.f);
+  iso_t_item.progressive_change_enabled(true);
+  //iso_t_item.add_change_event(&m_trans_iso_t_event);
+  //iso_t_item.add_change_event(&m_trans_iso_t_nonv_event);
+  // Зона нечувствительности
+  dead_band_item.set_header("Мертвая зона");
+  dead_band_item.set_message(ap_exit_msg);
+  dead_band_item.set_str(ap_user_str, "V", "%",
+    a_menu_item_width, a_menu_item_prec);
+  dead_band_item.set_max_value(10.0);
+  dead_band_item.set_min_value(0.0);
+  dead_band_item.set_key_type(IMK_ARROWS);
+  dead_band_item.set_change_step(0.01f);
+  dead_band_item.set_change_step_max(1.f);
+  dead_band_item.progressive_change_enabled(true);
+  //dead_band_item.add_change_event(&m_dead_band_nonv_event);
+}
+
+

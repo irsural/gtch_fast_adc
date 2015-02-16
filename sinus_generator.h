@@ -137,7 +137,9 @@ public:
   typedef std::size_t size_type;
   typedef interrupt_generator_t::counter_type period_t;
   typedef interrupt_generator_t::calc_type calc_period_t;
-  dc_generator_t(irs::pwm_gen_t* ap_pwm_gen, double a_dead_time);
+  dc_generator_t(interrupt_generator_t* ap_interrupt_generator,
+    size_type a_interrupt_freq_boost_factor,
+    irs::pwm_gen_t* ap_pwm_gen, double a_dead_time, size_type a_sinus_size);
   ~dc_generator_t();
   virtual void start();
   virtual void stop();
@@ -162,6 +164,8 @@ private:
   bool m_started;
   irs::pwm_gen_t* mp_pwm_gen;
   double m_amplitude;
+  const double m_frequency;
+  period_t m_floor_interval;
 };
 
 #endif // sinus_generatorH

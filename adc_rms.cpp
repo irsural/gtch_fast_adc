@@ -204,6 +204,7 @@ gtch::adc_rms_t::adc_rms_t(
   mp_spi(ap_spi),
   mp_adc(ap_adc),
   m_adc_channel(a_adc_channel),
+  m_current_type(current_type_ac),
   //m_adc_ad7686_data(mp_adc),
   m_downsampling_factor(a_downsampling_factor),
   m_period_sample_count(a_period_sample_count),
@@ -219,15 +220,16 @@ gtch::adc_rms_t::adc_rms_t(
   m_processed_index(0),
   m_adc_read_event(this),
   mp_interrupt_generator(ap_interrupt_generator),
+  /*m_sko_calc(
+    make_windows_sko_size(m_period_sample_count, m_windows_sko_period_count),
+    m_period_sample_count*m_average_period_count),*/
   m_sko_calc(
     make_windows_sko_size(m_period_sample_count, m_windows_sko_period_count),
-    m_period_sample_count*m_average_period_count),
-  //m_samples_max_size(5*m_period_sample_count),
-  //m_samples(),
+    m_period_sample_count*m_windows_sko_period_count[adc_type_slow]),
+
   m_sko_timer(irs::make_cnt_ms(100)),
   m_delta_timer(irs::make_cnt_ms(100)),
   m_results(),
-  //m_adc_fade_data(),
   m_result_fade(0),
   m_show_sinus(false)
 {
@@ -247,6 +249,8 @@ gtch::adc_rms_t::adc_rms_t(
   /*m_adc_fade_data.x1 = std::numeric_limits<double>::max();
   m_adc_fade_data.y1 = std::numeric_limits<double>::max();
   m_adc_fade_data.t = 1/m_sampling_time_s;*/
+
+  set_current_type(m_current_type);
 
   mp_interrupt_generator->add_event(&m_adc_read_event);
   m_adc_read_event.enable();
@@ -295,10 +299,12 @@ void gtch::adc_rms_t::set_current_type(current_type_t a_type)
   m_current_type = a_type;
   if (m_current_type == current_type_ac) {
     m_sko_calc.resize_average(m_period_sample_count*m_average_period_count);
+    IRS_LIB_DBG_MSG("average = " << m_period_sample_count*m_average_period_count);
   } else {
     //m_sko_calc.resize_average(0);
     m_sko_calc.resize_average(
       m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
+    IRS_LIB_DBG_MSG("average = " << m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
 
   }
   reset();
@@ -331,6 +337,7 @@ double gtch::adc_rms_t::get_max_voltage_code() const
 
 double gtch::adc_rms_t::get_slow_adc_voltage_code() const
 {
+  //IRS_LIB_DBG_MSG("m_results[adc_type_slow].value = " << m_results[adc_type_slow].value);
   return m_results[adc_type_slow].value;
 }
 

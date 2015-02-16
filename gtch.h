@@ -45,9 +45,12 @@ const char relay_no_action_str[] = "-----";
 
 struct nonvolatile_data_t
 {
-  irs::conn_data_t<float> k;
-  irs::conn_data_t<float> ki;
-  irs::conn_data_t<float> kd;
+  irs::conn_data_t<float> ac_k;
+  irs::conn_data_t<float> ac_ki;
+  irs::conn_data_t<float> ac_kd;
+  irs::conn_data_t<float> dc_k;
+  irs::conn_data_t<float> dc_ki;
+  irs::conn_data_t<float> dc_kd;
   irs::conn_data_t<float> contrast;
   irs::conn_data_t<float> current_limit;
   irs::conn_data_t<float> termo_limit;
@@ -63,16 +66,21 @@ struct nonvolatile_data_t
   irs::conn_data_t<bool> need_meas_time;
   irs::conn_data_t<bool> correct_freq_by_time;
   irs::conn_data_t<bool> tuda_obratno;
-  irs::conn_data_t<bool> need_meas_koef;
+  irs::conn_data_t<bool> ac_need_meas_koef;
+  irs::conn_data_t<bool> dc_need_meas_koef;
   irs::conn_data_t<bool> reset_nonvolatile_memory;
   irs::conn_data_t<bool> reset_correct_nonvolatile_memory;
   irs::conn_data_t<bool> voltage_correct_enable;
   irs::conn_data_t<bool> freq_correct_enable;
   irs::conn_data_t<float> freq_correct_koef;
-  irs::conn_data_t<float> t_adc;
-  irs::conn_data_t<float> iso_k;
-  irs::conn_data_t<float> iso_t;
-  irs::conn_data_t<float> dead_band;
+  irs::conn_data_t<float> ac_t_adc;
+  irs::conn_data_t<float> ac_iso_k;
+  irs::conn_data_t<float> ac_iso_t;
+  irs::conn_data_t<float> ac_dead_band;
+  irs::conn_data_t<float> dc_t_adc;
+  irs::conn_data_t<float> dc_iso_k;
+  irs::conn_data_t<float> dc_iso_t;
+  irs::conn_data_t<float> dc_dead_band;
   irs::conn_data_t<irs_u16> id;
   nonvolatile_data_t(irs::mxdata_t *ap_data = 0, irs_uarc a_start_index = 0,
     irs_uarc* ap_size = IRS_NULL)
@@ -87,9 +95,12 @@ struct nonvolatile_data_t
   irs_uarc connect(irs::mxdata_t *ap_data = 0, irs_uarc a_start_index = 0)
   {
     irs_uarc index = a_start_index;
-    index = k.connect(ap_data, index);
-    index = ki.connect(ap_data, index);
-    index = kd.connect(ap_data, index);
+    index = ac_k.connect(ap_data, index);
+    index = ac_ki.connect(ap_data, index);
+    index = ac_kd.connect(ap_data, index);
+    index = dc_k.connect(ap_data, index);
+    index = dc_ki.connect(ap_data, index);
+    index = dc_kd.connect(ap_data, index);
     index = contrast.connect(ap_data, index);
     index = current_limit.connect(ap_data, index);
     index = termo_limit.connect(ap_data, index);
@@ -105,16 +116,21 @@ struct nonvolatile_data_t
     index = need_meas_time.connect(ap_data, index);
     index = correct_freq_by_time.connect(ap_data, index);
     index = tuda_obratno.connect(ap_data, index);
-    index = need_meas_koef.connect(ap_data, index);
+    index = ac_need_meas_koef.connect(ap_data, index);
+    index = dc_need_meas_koef.connect(ap_data, index);
     index = reset_nonvolatile_memory.connect(ap_data, index);
     index = reset_correct_nonvolatile_memory.connect(ap_data, index);
     index = voltage_correct_enable.connect(ap_data, index);
     index = freq_correct_enable.connect(ap_data, index);
     index = freq_correct_koef.connect(ap_data, index);
-    index = t_adc.connect(ap_data, index);
-    index = iso_k.connect(ap_data, index);
-    index = iso_t.connect(ap_data, index);
-    index = dead_band.connect(ap_data, index);
+    index = ac_t_adc.connect(ap_data, index);
+    index = ac_iso_k.connect(ap_data, index);
+    index = ac_iso_t.connect(ap_data, index);
+    index = ac_dead_band.connect(ap_data, index);
+    index = dc_t_adc.connect(ap_data, index);
+    index = dc_iso_k.connect(ap_data, index);
+    index = dc_iso_t.connect(ap_data, index);
+    index = dc_dead_band.connect(ap_data, index);
     index = id.connect(ap_data, index);
     return index;
   };
@@ -629,6 +645,46 @@ void bounded_user_input_t<T>::set_max(const T& a_max)
 
 //------------------------------------------------------------------------------
 
+struct reg_options_t
+{
+  typedef size_t size_type;
+  enum {
+    CAN_WRITE = true,
+    CANNOT_WRITE = false
+  };
+  //  К
+  double k;
+  irs_menu_double_item_t k_item;
+  //  Кi
+  double ki;
+  irs_menu_double_item_t ki_item;
+  //  Кd
+  double kd;
+  irs_menu_double_item_t kd_item;
+  //
+  bool can_edit;
+  //  Переизмерение коэффициентов
+  bool need_meas_koef;
+  irs_menu_bool_item_t need_meas_koef_item;
+  //  Постоянная фильтра АЦП
+  double t_adc;
+  irs_menu_double_item_t t_adc_item;
+  bool voltage_filter_on;
+  //  Изодромное звено: К
+  double iso_k;
+  irs_menu_double_item_t iso_k_item;
+  //  Изодромное звено: Т
+  double iso_t;
+  irs_menu_double_item_t iso_t_item;
+  // Зона нечувствительности
+  double dead_band;
+  irs_menu_double_item_t dead_band_item;
+  reg_options_t(char* ap_user_str, char* ap_exit_msg,
+    size_type a_menu_item_width, size_type a_menu_item_prec);
+private:
+  reg_options_t();
+};
+
 irs::string_t align_center(const irs::string_t a_str, const size_t a_width,
   const irs::char_t a_fill = irst(' '));
 
@@ -773,7 +829,8 @@ class app_t
   irs::pid_data_t m_reg_pd;
   irs::rate_limiter_t<double> m_rate_data;
   float m_meas_k;
-  const float m_meas_k_default;
+  const float m_ac_meas_k_default;
+  const float m_dc_meas_k_default;
   const float m_min_meas_k_voltage;
   bool m_reg_koefs_changed;
   bool m_can_reg;
@@ -810,6 +867,7 @@ class app_t
   enum {
     m_half_screen = 10,
     m_menu_item_width = 5,
+    m_menu_reg_options_item_width = 6,
     m_menu_item_prec = 2,
     m_time_item_width = 5,
     m_time_item_prec = 4,
@@ -834,8 +892,10 @@ class app_t
   irs_advanced_tablo_t m_main_screen;
   //  Главное меню
   irs_advanced_menu_t m_main_menu;
-  //  Меню параметров регулятора
-  irs_advanced_menu_t m_reg_menu;
+  //  Меню параметров ac регулятора
+  irs_advanced_menu_t m_ac_reg_menu;
+  //  Меню параметров dc регулятора
+  irs_advanced_menu_t m_dc_reg_menu;
   //  Меню параметров защит
   irs_advanced_menu_t m_limit_menu;
   //  Частота
@@ -897,35 +957,39 @@ class app_t
   //  Контрастность
   double m_contrast;
   irs_menu_double_item_t m_contrast_item;
+
+  irs::handle_t<reg_options_t> mp_ac_reg_options;
+  irs::handle_t<reg_options_t> mp_dc_reg_options;
+
   //  К
-  double m_k;
+  /*double m_k;
   irs_menu_double_item_t m_k_item;
   //  Кi
   double m_ki;
   irs_menu_double_item_t m_ki_item;
   //  Кd
   double m_kd;
-  irs_menu_double_item_t m_kd_item;
+  irs_menu_double_item_t m_kd_item;*/
   //
   bool m_can_edit;
   //  Переизмерение коэффициентов
-  bool m_need_meas_koef;
-  irs_menu_bool_item_t m_need_meas_koef_item;
+  //bool m_need_meas_koef;
+  //irs_menu_bool_item_t m_need_meas_koef_item;
   //  Постоянная фильтра АЦП
-  double m_t_adc;
-  irs_menu_double_item_t m_t_adc_item;
+  //double m_t_adc;
+  //irs_menu_double_item_t m_t_adc_item;
   bool m_voltage_filter_on;
   //  Изодромное звено: К
-  double m_iso_k;
+  /*double m_iso_k;
   irs_menu_double_item_t m_iso_k_item;
   //  Изодромное звено: Т
   double m_iso_t;
-  irs_menu_double_item_t m_iso_t_item;
+  irs_menu_double_item_t m_iso_t_item;*/
   //  Изодромное звено
   irs::isodr_data_t m_iso_data;
   // Зона нечувствительности
-  double m_dead_band;
-  irs_menu_double_item_t m_dead_band_item;
+  /*double m_dead_band;
+  irs_menu_double_item_t m_dead_band_item;*/
   //  АЦП
   adc_data_t m_adc_value;
   irs_menu_simply_item_t<adc_data_t> m_adc_item;
@@ -1009,11 +1073,17 @@ class app_t
   bounded_user_input_t<double> m_voltage_ref_input;
   irs::loop_timer_t m_nonvolatile_update_timer;
   //  Функции передачи
-  mxfact_event_t m_trans_k_nonv_event;
-  mxfact_event_t m_trans_ki_event;
-  mxfact_event_t m_trans_ki_nonv_event;
-  mxfact_event_t m_trans_kd_event;
-  mxfact_event_t m_trans_kd_nonv_event;
+
+  mxfact_event_t m_trans_ac_k_nonv_event;
+  mxfact_event_t m_trans_ac_ki_event;
+  mxfact_event_t m_trans_ac_ki_nonv_event;
+  mxfact_event_t m_trans_ac_kd_event;
+  mxfact_event_t m_trans_ac_kd_nonv_event;
+  mxfact_event_t m_trans_dc_k_nonv_event;
+  mxfact_event_t m_trans_dc_ki_event;
+  mxfact_event_t m_trans_dc_ki_nonv_event;
+  mxfact_event_t m_trans_dc_kd_event;
+  mxfact_event_t m_trans_dc_kd_nonv_event;
   mxfact_event_t m_trans_contrast_event;
   mxfact_event_t m_trans_contrast_nonv_event;
   mxfact_event_t m_trans_current_limit_event;
@@ -1030,17 +1100,25 @@ class app_t
   mxfact_event_t m_trans_need_meas_time_nonv_event;
   mxfact_event_t m_trans_correct_freq_by_time_nonv_event;
   mxfact_event_t m_trans_tuda_obratno_nonv_event;
-  mxfact_event_t m_trans_need_meas_koef_nonv_event;
+  mxfact_event_t m_trans_ac_need_meas_koef_nonv_event;
+  mxfact_event_t m_trans_dc_need_meas_koef_nonv_event;
   mxfact_event_t m_trans_voltage_correct_enable_nonv_event;
   mxfact_event_t m_trans_freq_correct_enable_nonv_event;
   mxfact_event_t m_trans_freq_correct_koef_event;
-  mxfact_event_t m_trans_t_adc_event;
-  mxfact_event_t m_trans_t_adc_nonv_event;
-  mxfact_event_t m_trans_iso_k_event;
-  mxfact_event_t m_trans_iso_k_nonv_event;
-  mxfact_event_t m_trans_iso_t_event;
-  mxfact_event_t m_trans_iso_t_nonv_event;
-  mxfact_event_t m_dead_band_nonv_event;
+  mxfact_event_t m_trans_ac_t_adc_event;
+  mxfact_event_t m_trans_ac_t_adc_nonv_event;
+  mxfact_event_t m_trans_ac_iso_k_event;
+  mxfact_event_t m_trans_ac_iso_k_nonv_event;
+  mxfact_event_t m_trans_ac_iso_t_event;
+  mxfact_event_t m_trans_ac_iso_t_nonv_event;
+  mxfact_event_t m_trans_ac_dead_band_nonv_event;
+  mxfact_event_t m_trans_dc_t_adc_event;
+  mxfact_event_t m_trans_dc_t_adc_nonv_event;
+  mxfact_event_t m_trans_dc_iso_k_event;
+  mxfact_event_t m_trans_dc_iso_k_nonv_event;
+  mxfact_event_t m_trans_dc_iso_t_event;
+  mxfact_event_t m_trans_dc_iso_t_nonv_event;
+  mxfact_event_t m_trans_dc_dead_band_nonv_event;
   mxfact_event_t m_id_pass_event;
   mxfact_event_t m_id_nonv_event;
   mxfact_event_t m_reset_nonvolatile_memory_nonv_event;
@@ -1061,6 +1139,8 @@ class app_t
 
   void update_configuration_for_mode_dc_ac();
   void update_config_voltage_range();
+  reg_options_t* get_actual_reg_options();
+  double get_meas_k_default() const;
   std::vector<size_type> make_adc_channels_sko_period_count();
   float adc_to_voltage(adc_data_t a_adc);
   void to_stop();
@@ -1108,8 +1188,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_interrupt_generator(m_cfg.get_int_generator()),
 
   m_period_sample_count(128), //100
-  m_sko_period_count(50),//50
-  m_short_sko_period_count(5),
+  m_sko_period_count(10),//50
+  m_short_sko_period_count(10),
   m_average_period_count(1),
   m_sko_point_count(60),
   m_delta_point_count(60),
@@ -1153,7 +1233,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reg_timer(m_meas_interval),
   m_rate_data(),
   m_meas_k(0.f),
-  m_meas_k_default(1./220.),
+  m_ac_meas_k_default(1./220.),
+  m_dc_meas_k_default(1./300.),
   m_min_meas_k_voltage(5.f),
   m_reg_koefs_changed(false),
   m_can_reg(true),
@@ -1178,7 +1259,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   //  Главное меню
   m_main_menu(),
   //  Меню параметров регулятора
-  m_reg_menu(),
+  m_ac_reg_menu(),
+  m_dc_reg_menu(),
   //  Меню параметров защит
   m_limit_menu(),
   //  Частота
@@ -1240,35 +1322,39 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   //  Контрастность
   m_contrast(0.f),
   m_contrast_item(&m_contrast, CAN_WRITE),
+
+  mp_ac_reg_options(),
+  mp_dc_reg_options(),
+
   //  К
-  m_k(0.f),
+  /*m_k(0.f),
   m_k_item(&m_k, CAN_WRITE),
   //  Кi
   m_ki(0.f),
   m_ki_item(&m_ki, CAN_WRITE),
   //  Кd
   m_kd(0.f),
-  m_kd_item(&m_kd, CAN_WRITE),
+  m_kd_item(&m_kd, CAN_WRITE),*/
   //
   m_can_edit(true),
   //  Переизмерение коэффициентов
-  m_need_meas_koef(false),
+  /*m_need_meas_koef(false),
   m_need_meas_koef_item((irs_bool*)&m_need_meas_koef, m_can_edit),
   //  Постоянная фильтра АЦП
   m_t_adc(0.),
-  m_t_adc_item(&m_t_adc, CAN_WRITE),
+  m_t_adc_item(&m_t_adc, CAN_WRITE),*/
   m_voltage_filter_on(false),
   //  Изодромное звено: К
-  m_iso_k(0.),
+  /*m_iso_k(0.),
   m_iso_k_item(&m_iso_k, CAN_WRITE),
   //  Изодромное звено: Т
   m_iso_t(0.),
-  m_iso_t_item(&m_iso_t, CAN_WRITE),
+  m_iso_t_item(&m_iso_t, CAN_WRITE),*/
   //  Изодромное звено
   m_iso_data(),
   // Зона нечувствительности
-  m_dead_band(0.),
-  m_dead_band_item(&m_dead_band, CAN_WRITE),
+  /*m_dead_band(0.),
+  m_dead_band_item(&m_dead_band, CAN_WRITE),*/
   //  АЦП
   m_adc_value(0),
   m_adc_item(&m_adc_value),
@@ -1361,11 +1447,16 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_min_voltage, m_max_voltage),
   m_nonvolatile_update_timer(irs::make_cnt_ms(300)),
   //
-  m_trans_k_nonv_event(),
-  m_trans_ki_event(),
-  m_trans_ki_nonv_event(),
-  m_trans_kd_event(),
-  m_trans_kd_nonv_event(),
+  m_trans_ac_k_nonv_event(),
+  m_trans_ac_ki_event(),
+  m_trans_ac_ki_nonv_event(),
+  m_trans_ac_kd_event(),
+  m_trans_ac_kd_nonv_event(),
+  m_trans_dc_k_nonv_event(),
+  m_trans_dc_ki_event(),
+  m_trans_dc_ki_nonv_event(),
+  m_trans_dc_kd_event(),
+  m_trans_dc_kd_nonv_event(),
   m_trans_contrast_event(),
   m_trans_contrast_nonv_event(),
   m_trans_current_limit_event(),
@@ -1382,17 +1473,25 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_trans_need_meas_time_nonv_event(),
   m_trans_correct_freq_by_time_nonv_event(),
   m_trans_tuda_obratno_nonv_event(),
-  m_trans_need_meas_koef_nonv_event(),
+  m_trans_ac_need_meas_koef_nonv_event(),
+  m_trans_dc_need_meas_koef_nonv_event(),
   m_trans_voltage_correct_enable_nonv_event(),
   m_trans_freq_correct_enable_nonv_event(),
   m_trans_freq_correct_koef_event(),
-  m_trans_t_adc_event(),
-  m_trans_t_adc_nonv_event(),
-  m_trans_iso_k_event(),
-  m_trans_iso_k_nonv_event(),
-  m_trans_iso_t_event(),
-  m_trans_iso_t_nonv_event(),
-  m_dead_band_nonv_event(),
+  m_trans_ac_t_adc_event(),
+  m_trans_ac_t_adc_nonv_event(),
+  m_trans_ac_iso_k_event(),
+  m_trans_ac_iso_k_nonv_event(),
+  m_trans_ac_iso_t_event(),
+  m_trans_ac_iso_t_nonv_event(),
+  m_trans_ac_dead_band_nonv_event(),
+  m_trans_dc_t_adc_event(),
+  m_trans_dc_t_adc_nonv_event(),
+  m_trans_dc_iso_k_event(),
+  m_trans_dc_iso_k_nonv_event(),
+  m_trans_dc_iso_t_event(),
+  m_trans_dc_iso_t_nonv_event(),
+  m_trans_dc_dead_band_nonv_event(),
   m_id_pass_event(),
   m_id_nonv_event(),
   m_reset_nonvolatile_memory_nonv_event(),
@@ -1463,6 +1562,19 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     }
   }
 
+  //  Меню
+  memset(mp_user_str, ' ', m_user_str_len);
+  mp_user_str[m_user_str_len] = '\0';
+  m_main_creep.change_static("Режим: СТОП");
+  strcpy(mp_enter_msg, "Для входа в меню нажмите '€'");
+  strcpy(mp_exit_msg, "Для выхода из меню нажмите 'esc'");
+
+  mp_ac_reg_options.reset(new reg_options_t(mp_user_str, mp_exit_msg,
+    m_menu_reg_options_item_width, m_menu_item_prec));
+  mp_dc_reg_options.reset(new reg_options_t(mp_user_str, mp_exit_msg,
+    m_menu_reg_options_item_width, m_menu_item_prec));
+
+
   // Nonvolatile memory
   const bool nonvolatile_memory_error = m_cfg.nonvolatile_memory_error();
   const bool need_reset_correct_nonvolatile_memory =
@@ -1477,9 +1589,12 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     GTCH_DBG_MSG(irsm("partial eeprom error") << endl);
   }
 
-  m_k = m_nonvolatile_data.k;
-  m_ki = m_nonvolatile_data.ki;
-  m_kd = m_nonvolatile_data.kd;
+  mp_ac_reg_options->k = m_nonvolatile_data.ac_k;
+  mp_ac_reg_options->ki = m_nonvolatile_data.ac_ki;
+  mp_ac_reg_options->kd = m_nonvolatile_data.ac_kd;
+  mp_dc_reg_options->k = m_nonvolatile_data.dc_k;
+  mp_dc_reg_options->ki = m_nonvolatile_data.dc_ki;
+  mp_dc_reg_options->kd = m_nonvolatile_data.dc_kd;
   m_contrast = m_nonvolatile_data.contrast;
   mp_lcd_contrast_pwm->set_duty(float(m_contrast));
   m_current_limit = m_nonvolatile_data.current_limit;
@@ -1495,14 +1610,19 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_scan_need_meas_time = m_nonvolatile_data.need_meas_time;
   m_scan_correct_freq_by_time = m_nonvolatile_data.correct_freq_by_time;
   m_scan_tuda_obratno = m_nonvolatile_data.tuda_obratno;
-  m_need_meas_koef = m_nonvolatile_data.need_meas_koef;
+  mp_ac_reg_options->need_meas_koef = m_nonvolatile_data.ac_need_meas_koef;
+  mp_dc_reg_options->need_meas_koef = m_nonvolatile_data.dc_need_meas_koef;
   m_voltage_correct_enable = m_nonvolatile_data.voltage_correct_enable;
   m_freq_correct_enable = m_nonvolatile_data.freq_correct_enable;
   m_freq_correct = m_freq * m_nonvolatile_data.freq_correct_koef;
-  m_t_adc = m_nonvolatile_data.t_adc;
-  m_iso_k = m_nonvolatile_data.iso_k;
-  m_iso_t = m_nonvolatile_data.iso_t;
-  m_dead_band = m_nonvolatile_data.dead_band;
+  mp_ac_reg_options->t_adc = m_nonvolatile_data.ac_t_adc;
+  mp_ac_reg_options->iso_k = m_nonvolatile_data.ac_iso_k;
+  mp_ac_reg_options->iso_t = m_nonvolatile_data.ac_iso_t;
+  mp_ac_reg_options->dead_band = m_nonvolatile_data.ac_dead_band;
+  mp_dc_reg_options->t_adc = m_nonvolatile_data.dc_t_adc;
+  mp_dc_reg_options->iso_k = m_nonvolatile_data.dc_iso_k;
+  mp_dc_reg_options->iso_t = m_nonvolatile_data.dc_iso_t;
+  mp_dc_reg_options->dead_band = m_nonvolatile_data.dc_dead_band;
   id(m_nonvolatile_data.id);
 
   //!!! Не забыть включить обратно
@@ -1510,41 +1630,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     //m_buzzer.bzzz();
   }
 
-  //  АЦП
-  //m_adc_filter.restart();
-  m_adc_fade_data.x1 = 0.;
-  m_adc_fade_data.y1 = 0.;
-  m_adc_fade_data.t = m_t_adc /m_filter_update_interval;
-  //  Регульятор
-  m_reg_pd.k = m_k;
-  //m_reg_pd.ki = m_ki;
-  m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_reg_interval);
-  //m_reg_pd.kd = m_kd;
-  m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_reg_interval);
-  m_reg_pd.min = m_meas_gen_value;
-  m_reg_pd.max = mp_generator->get_max_amplitude();
-  m_reg_pd.prev_e = 0.;
-  m_reg_pd.pp_e = 0.;
-  m_reg_pd.prev_out = 0.;
-  m_reg_pd.block_int = 0;
-  m_reg_pd.block_int_ext = 0;
-  m_reg_pd.int_val = 0.;
-  m_reg_pd.k_d_pid = 0.1;
-
-  m_rate_data.cur = 0;
-  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);
-  m_rate_data.slope = 300;
-  m_rate_data.recalc = 0;
-  m_rate_data.dl = 0;
-  m_rate_data.slope_prev = 0;
-  m_rate_data.dt_prev = 0;
-
-  //  Меню
-  memset(mp_user_str, ' ', m_user_str_len);
-  mp_user_str[m_user_str_len] = '\0';
-  m_main_creep.change_static("Режим: СТОП");
-  strcpy(mp_enter_msg, "Для входа в меню нажмите '€'");
-  strcpy(mp_exit_msg, "Для выхода из меню нажмите 'esc'");
+  // Меню
   //  Основной экран
   m_main_screen.set_key_event(&m_menu_kb_event);
   m_main_screen.set_message(mp_enter_msg);
@@ -1572,7 +1658,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_screen.hide_item(&m_meas_k_item);
   //  Основное меню
   m_main_menu.set_header("Настройки");
-  m_main_menu.add(&m_reg_menu, HIDE_ITEM);
+  m_main_menu.add(&m_ac_reg_menu, HIDE_ITEM);
+  m_main_menu.add(&m_dc_reg_menu, HIDE_ITEM);
   m_main_menu.add(&m_limit_menu, HIDE_ITEM);
   m_main_menu.add(&m_scan_menu, HIDE_ITEM);
   m_main_menu.add(&m_correct_menu, HIDE_ITEM);
@@ -1582,7 +1669,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.add(&m_correct_freq_by_time_item, SHOW_ITEM);
   m_main_menu.add(&m_tuda_obratno_item, SHOW_ITEM);
   //  Меню регулятора
-  m_reg_menu.set_header("Меню регулятора");
+  /*m_reg_menu.set_header("Меню регулятора");
   m_reg_menu.add(&m_k_item);
   m_reg_menu.add(&m_ki_item);
   m_reg_menu.add(&m_kd_item);
@@ -1591,6 +1678,30 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reg_menu.add(&m_iso_k_item);
   m_reg_menu.add(&m_iso_t_item);
   m_reg_menu.add(&m_dead_band_item);
+  */
+
+  //  Меню регулятора
+  m_ac_reg_menu.set_header("Меню AC регулят.");
+  m_ac_reg_menu.add(&mp_ac_reg_options->k_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->ki_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->kd_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->need_meas_koef_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->t_adc_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->iso_k_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->iso_t_item);
+  m_ac_reg_menu.add(&mp_ac_reg_options->dead_band_item);
+
+  //  Меню регулятора
+  m_dc_reg_menu.set_header("Меню DC регулят.");
+  m_dc_reg_menu.add(&mp_dc_reg_options->k_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->ki_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->kd_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->need_meas_koef_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->t_adc_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->iso_k_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->iso_t_item);
+  m_dc_reg_menu.add(&mp_dc_reg_options->dead_band_item);
+
   //  Меню защит
   m_limit_menu.set_header("Меню защит");
   m_limit_menu.add(&m_current_limit_item);
@@ -1656,14 +1767,49 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_contrast_item.set_creep(&m_main_creep);
   m_contrast_item.set_disp_drv(&m_lcd_drv_service);
   m_contrast_item.set_cursor_symbol(0x01);
+
+  //mp_ac_reg_options.reset(new reg_options_t(mp_user_str, mp_exit_msg,
+    //m_menu_item_width, m_menu_item_prec));
+  mp_ac_reg_options->k_item.add_change_event(&m_trans_ac_k_nonv_event);
+  mp_ac_reg_options->ki_item.add_change_event(&m_trans_ac_ki_event);
+  mp_ac_reg_options->ki_item.add_change_event(&m_trans_ac_ki_nonv_event);
+  mp_ac_reg_options->kd_item.add_change_event(&m_trans_ac_kd_event);
+  mp_ac_reg_options->kd_item.add_change_event(&m_trans_ac_kd_nonv_event);
+  mp_ac_reg_options->need_meas_koef_item.add_change_event(
+    &m_trans_ac_need_meas_koef_nonv_event);
+  mp_ac_reg_options->t_adc_item.add_change_event(&m_trans_ac_t_adc_event);
+  mp_ac_reg_options->t_adc_item.add_change_event(&m_trans_ac_t_adc_nonv_event);
+  mp_ac_reg_options->iso_k_item.add_change_event(&m_trans_ac_iso_k_event);
+  mp_ac_reg_options->iso_k_item.add_change_event(&m_trans_ac_iso_k_nonv_event);
+  mp_ac_reg_options->iso_t_item.add_change_event(&m_trans_ac_iso_t_event);
+  mp_ac_reg_options->iso_t_item.add_change_event(&m_trans_ac_iso_t_nonv_event);
+  mp_ac_reg_options->dead_band_item.add_change_event(
+    &m_trans_ac_dead_band_nonv_event);
+
+  mp_dc_reg_options->k_item.add_change_event(&m_trans_dc_k_nonv_event);
+  mp_dc_reg_options->ki_item.add_change_event(&m_trans_dc_ki_event);
+  mp_dc_reg_options->ki_item.add_change_event(&m_trans_dc_ki_nonv_event);
+  mp_dc_reg_options->kd_item.add_change_event(&m_trans_dc_kd_event);
+  mp_dc_reg_options->kd_item.add_change_event(&m_trans_dc_kd_nonv_event);
+  mp_dc_reg_options->need_meas_koef_item.add_change_event(
+    &m_trans_dc_need_meas_koef_nonv_event);
+  mp_dc_reg_options->t_adc_item.add_change_event(&m_trans_dc_t_adc_event);
+  mp_dc_reg_options->t_adc_item.add_change_event(&m_trans_dc_t_adc_nonv_event);
+  mp_dc_reg_options->iso_k_item.add_change_event(&m_trans_dc_iso_k_event);
+  mp_dc_reg_options->iso_k_item.add_change_event(&m_trans_dc_iso_k_nonv_event);
+  mp_dc_reg_options->iso_t_item.add_change_event(&m_trans_dc_iso_t_event);
+  mp_dc_reg_options->iso_t_item.add_change_event(&m_trans_dc_iso_t_nonv_event);
+  mp_dc_reg_options->dead_band_item.add_change_event(
+    &m_trans_dc_dead_band_nonv_event);
+
   //  К
-  m_k_item.set_header("Проп. коэф.");
+  /*m_k_item.set_header("Проп. коэф.");
   m_k_item.set_message(mp_exit_msg);
   m_k_item.set_str(mp_user_str, "Кп", "",
     m_menu_item_width, m_menu_item_prec);
   m_k_item.set_max_value(1000.0);
   m_k_item.set_min_value(0.0);
-  m_k_item.add_change_event(&m_trans_k_nonv_event);
+  m_k_item.add_change_event(&m_trans_ac_k_nonv_event);
   m_k_item.set_key_type(IMK_ARROWS);
   m_k_item.set_change_step(0.01f);
   //  Кi
@@ -1673,8 +1819,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_menu_item_width, m_menu_item_prec);
   m_ki_item.set_max_value(1000.0);
   m_ki_item.set_min_value(0.0);
-  m_ki_item.add_change_event(&m_trans_ki_event);
-  m_ki_item.add_change_event(&m_trans_ki_nonv_event);
+  m_ki_item.add_change_event(&m_trans_ac_ki_event);
+  m_ki_item.add_change_event(&m_trans_ac_ki_nonv_event);
   m_ki_item.set_key_type(IMK_ARROWS);
   m_ki_item.set_change_step(0.01f);
   //  Кd
@@ -1684,14 +1830,14 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_menu_item_width, m_menu_item_prec);
   m_kd_item.set_max_value(1000.0);
   m_kd_item.set_min_value(0.0);
-  m_kd_item.add_change_event(&m_trans_kd_event);
-  m_kd_item.add_change_event(&m_trans_kd_nonv_event);
+  m_kd_item.add_change_event(&m_trans_ac_kd_event);
+  m_kd_item.add_change_event(&m_trans_ac_kd_nonv_event);
   m_kd_item.set_key_type(IMK_ARROWS);
   m_kd_item.set_change_step(0.01f);
   //  Переизмерение коэффициентов
   m_need_meas_koef_item.set_header("Изм. коэф.");
   m_need_meas_koef_item.set_str("Включено", "Выключено");
-  m_need_meas_koef_item.add_change_event(&m_trans_need_meas_koef_nonv_event);
+  m_need_meas_koef_item.add_change_event(&m_trans_ac_need_meas_koef_nonv_event);
   //  Постоянная фильтра АЦП
   m_t_adc_item.set_header("Пост. фильтра напр.");
   m_t_adc_item.set_message(mp_exit_msg);
@@ -1701,8 +1847,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_t_adc_item.set_min_value(0.0);
   m_t_adc_item.set_key_type(IMK_ARROWS);
   m_t_adc_item.set_change_step(0.05f);
-  m_t_adc_item.add_change_event(&m_trans_t_adc_event);
-  m_t_adc_item.add_change_event(&m_trans_t_adc_nonv_event);
+  m_t_adc_item.add_change_event(&m_trans_ac_t_adc_event);
+  m_t_adc_item.add_change_event(&m_trans_ac_t_adc_nonv_event);
   //  Изодромное звено
   m_iso_data.k = m_iso_k;
   m_iso_data.fd.x1 = 0.;
@@ -1717,8 +1863,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_iso_k_item.set_min_value(0.);
   m_iso_k_item.set_key_type(IMK_ARROWS);
   m_iso_k_item.set_change_step(0.05f);
-  m_iso_k_item.add_change_event(&m_trans_iso_k_event);
-  m_iso_k_item.add_change_event(&m_trans_iso_k_nonv_event);
+  m_iso_k_item.add_change_event(&m_trans_ac_iso_k_event);
+  m_iso_k_item.add_change_event(&m_trans_ac_iso_k_nonv_event);
   //  Изодромное звено: Т
   m_iso_t_item.set_header("Изодр. пост. вр.");
   m_iso_t_item.set_message(mp_exit_msg);
@@ -1728,8 +1874,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_iso_t_item.set_min_value(0.0);
   m_iso_t_item.set_key_type(IMK_ARROWS);
   m_iso_t_item.set_change_step(0.05f);
-  m_iso_t_item.add_change_event(&m_trans_iso_t_event);
-  m_iso_t_item.add_change_event(&m_trans_iso_t_nonv_event);
+  m_iso_t_item.add_change_event(&m_trans_ac_iso_t_event);
+  m_iso_t_item.add_change_event(&m_trans_ac_iso_t_nonv_event);
   // Зона нечувствительности
   m_dead_band_item.set_header("Мертвая зона");
   m_dead_band_item.set_message(mp_exit_msg);
@@ -1739,7 +1885,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_dead_band_item.set_min_value(0.0);
   m_dead_band_item.set_key_type(IMK_ARROWS);
   m_dead_band_item.set_change_step(0.05f);
-  m_dead_band_item.add_change_event(&m_dead_band_nonv_event);
+  m_dead_band_item.add_change_event(&m_trans_ac_dead_band_nonv_event);*/
   //  АЦП
   m_adc_item.set_str(mp_user_str, "АЦП", "", m_adc_item_width, m_adc_item_prec);
   //  ШИМ
@@ -1938,7 +2084,43 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
   //m_mode_dc_enabled_previous = m_mode_dc_enabled;
 
+
   update_configuration_for_mode_dc_ac();
+
+  //  АЦП
+  //m_adc_filter.restart();
+  const reg_options_t* reg_opt = get_actual_reg_options();
+  m_adc_fade_data.x1 = 0.;
+  m_adc_fade_data.y1 = 0.;
+  m_adc_fade_data.t = reg_opt->t_adc /m_filter_update_interval;
+  //  Регульятор
+  m_reg_pd.k = reg_opt->k;
+  m_reg_pd.ki = reg_opt->ki * CNT_TO_DBLTIME(m_reg_interval);
+  m_reg_pd.kd = reg_opt->kd / CNT_TO_DBLTIME(m_reg_interval);
+  m_reg_pd.min = m_meas_gen_value;
+  m_reg_pd.max = mp_generator->get_max_amplitude();
+  m_reg_pd.prev_e = 0.;
+  m_reg_pd.pp_e = 0.;
+  m_reg_pd.prev_out = 0.;
+  m_reg_pd.block_int = 0;
+  m_reg_pd.block_int_ext = 0;
+  m_reg_pd.int_val = 0.;
+  m_reg_pd.k_d_pid = 0.1;
+
+  //  Изодромное звено
+  m_iso_data.k = reg_opt->iso_k;
+  m_iso_data.fd.x1 = 0.;
+  m_iso_data.fd.y1 = 0.;
+  m_iso_data.fd.t = reg_opt->iso_t / CNT_TO_DBLTIME(m_reg_interval);
+
+  m_rate_data.cur = 0;
+  m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
+  m_rate_data.slope = 300;
+  m_rate_data.recalc = 0;
+  m_rate_data.dl = 0;
+  m_rate_data.slope_prev = 0;
+  m_rate_data.dt_prev = 0;
+
   mp_generator->stop();
   mp_generator->set_amplitude(0.1f);
   mp_generator->set_frequency(m_freq);
@@ -1981,9 +2163,6 @@ void app_t<CFG>::update_configuration_for_mode_dc_ac()
   }
 
   if (m_mode_dc_enabled) {
-    //m_freq_begin_saved_copy = m_freq_begin;
-    //m_freq_end_saved_copy = m_freq_end;
-    //m_speed_freq_saved_copy = m_speed_freq;
     m_voltage_ref = m_nonvolatile_data.dc_voltage_ref;
     m_freq_begin = 0;
     m_freq_end = 0;
@@ -1991,22 +2170,31 @@ void app_t<CFG>::update_configuration_for_mode_dc_ac()
 
     m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_dc);
     mp_generator.reset();
-    mp_generator.reset(new dc_generator_t(&m_sinus_pwm,
-      m_cfg.m_ir2183_dead_time));
+    mp_generator.reset(new dc_generator_t(&m_interrupt_generator,
+      interrupt_freq_boost_factor, &m_sinus_pwm,
+      m_cfg.m_ir2183_dead_time, CFG::sinus_size));
 
     m_freq_begin_input.set_keys(irskey_none, irskey_none);
     m_freq_end_input.set_keys(irskey_none, irskey_none);
     m_speed_freq_input.set_keys(irskey_none, irskey_none);
   } else {
     m_voltage_ref = m_nonvolatile_data.ac_voltage_ref;
-    m_freq_begin = m_nonvolatile_data.freq_begin;   // m_freq_begin_saved_copy;
-    m_freq_end = m_nonvolatile_data.freq_end;       //m_freq_end_saved_copy;
-    m_speed_freq = m_nonvolatile_data.speed_freq;   //m_speed_freq_saved_copy;
+    m_freq_begin = m_nonvolatile_data.freq_begin;
+    m_freq_end = m_nonvolatile_data.freq_end;
+    m_speed_freq = m_nonvolatile_data.speed_freq;
     m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
     mp_generator.reset();
     mp_generator.reset(new sinus_generator_t(&m_interrupt_generator,
       interrupt_freq_boost_factor, &m_sinus_pwm,
       CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size));
+
+    if (m_freq_correct_enable) {
+      mp_generator->set_correct_freq_koef(
+        m_nonvolatile_data.freq_correct_koef);
+    } else {
+      mp_generator->set_correct_freq_koef(1.0);
+    }
+
 
     m_freq_begin_input.set_keys(static_cast<irskey_t>(m_key_Fn_up),
       static_cast<irskey_t>(m_key_Fn_down));
@@ -2047,6 +2235,24 @@ void app_t<CFG>::update_config_voltage_range()
 }
 
 template <class CFG>
+reg_options_t* app_t<CFG>::get_actual_reg_options()
+{
+  if (m_mode_dc_enabled) {
+    return mp_dc_reg_options.get();
+  }
+  return mp_ac_reg_options.get();
+}
+
+template <class CFG>
+double app_t<CFG>::get_meas_k_default() const
+{
+  if (m_mode_dc_enabled) {
+    return m_dc_meas_k_default;
+  }
+  return m_ac_meas_k_default;
+}
+
+template <class CFG>
 std::vector<typename app_t<CFG>::size_type>
 app_t<CFG>::make_adc_channels_sko_period_count()
 {
@@ -2066,7 +2272,7 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
   // Коэффициент подобран экспериментально при U = 51.4 В
   //const float experimental_factor = 43.07247;
   const float experimental_factor = 122.995831;
-  float a = static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum());
+  //float a = static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum());
   //IRS_LIB_DBG_MSG("A = " << a);
   const float k = experimental_factor*
     (m_adc_settings.v_reference/
@@ -2105,25 +2311,61 @@ void app_t<CFG>::to_stop()
 template <class CFG>
 void app_t<CFG>::to_start()
 {
-  m_rate_data.cur = m_voltage;
-  const double cur_voltage_ref =
-    irs::rate_limiter(&m_rate_data, m_voltage_ref);
+  /*m_mode_dc_enabled = false;
+  update_configuration_for_mode_dc_ac();
+  m_mode_dc_enabled = true;
+  update_configuration_for_mode_dc_ac();*/
+  //-----------------------------------------------
+  //m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
+  /*mp_generator.reset();
+  mp_generator.reset(new sinus_generator_t(&m_interrupt_generator,
+    interrupt_freq_boost_factor, &m_sinus_pwm,
+    CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size));
 
-  m_meas_k = m_meas_k_default;
-  m_reg_pd.k = m_k * m_meas_k;
+  m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_dc);
+  mp_generator.reset();
+  mp_generator.reset(new dc_generator_t(&m_sinus_pwm,
+    m_cfg.m_ir2183_dead_time));*/
+
+
+  //-----------------------------------------------
+
+
+
+  m_rate_data.cur = m_voltage;
+
+  const reg_options_t* reg_opt = get_actual_reg_options();
+
+  m_meas_k = get_meas_k_default();
+  m_reg_pd.k = reg_opt->k * m_meas_k;
+  m_reg_pd.ki = reg_opt->ki * CNT_TO_DBLTIME(m_reg_interval);
+  m_reg_pd.kd = reg_opt->kd / CNT_TO_DBLTIME(m_reg_interval);
   //float e = m_voltage_ref - m_voltage;
+
+  /*m_reg_timer.set(m_meas_interval);
+  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
+  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);*/
+  m_reg_timer.set(m_reg_interval);
+
+  m_iso_data.k = reg_opt->iso_k;
+  m_iso_data.fd.t = reg_opt->iso_t / CNT_TO_DBLTIME(m_reg_interval);
+  m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
+
+  const double cur_voltage_ref =
+    m_voltage_ref;//irs::rate_limiter(&m_rate_data, m_voltage_ref);
   float e = cur_voltage_ref - m_voltage;
   pid_reg_sync(&m_reg_pd, e, m_meas_gen_value);
   mp_generator->set_amplitude(m_meas_gen_value);
   mp_generator->start();
   m_overcurrent_detection_enabled = true;
-  /*m_reg_timer.set(m_meas_interval);
-  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
-  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);*/
-  m_reg_timer.set(m_reg_interval);
-  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
-  m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);
+
   m_reg_timer.start();
+  IRS_LIB_DBG_MSG("-----------start---------");
+  IRS_LIB_DBG_MSG("m_reg_pd.k = " << m_reg_pd.k);
+  IRS_LIB_DBG_MSG("m_reg_pd.ki = " << m_reg_pd.ki);
+  IRS_LIB_DBG_MSG("m_reg_pd.kd = " << m_reg_pd.kd);
+  IRS_LIB_DBG_MSG("m_iso_data.k = " << m_iso_data.k);
+  IRS_LIB_DBG_MSG("m_iso_data.fd.t = " << m_iso_data.fd.t);
 }
 
 template <class CFG>
@@ -2378,25 +2620,61 @@ void app_t<CFG>::in_tick()
     mp_current_limit_code->set_u32_data(0,
       static_cast<irs_u32>(m_current_limit*m_trans_koef));
   }
-  if (m_trans_ki_event.check()) {
-    //m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_meas_interval);
-    m_reg_pd.ki = m_ki * CNT_TO_DBLTIME(m_reg_interval);
+  if (m_trans_ac_ki_event.check()) {
+    if (!m_mode_dc_enabled) {
+      m_reg_pd.ki = mp_ac_reg_options->ki * CNT_TO_DBLTIME(m_reg_interval);
+    }
   }
-  if (m_trans_kd_event.check()) {
-    //m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_meas_interval);
-    m_reg_pd.kd = m_kd / CNT_TO_DBLTIME(m_reg_interval);
+  if (m_trans_ac_kd_event.check()) {
+    if (!m_mode_dc_enabled) {
+      m_reg_pd.kd = mp_ac_reg_options->kd / CNT_TO_DBLTIME(m_reg_interval);
+    }
   }
-  if (m_trans_t_adc_event.check()) {
-    m_adc_fade_data.t = m_t_adc/m_filter_update_interval;
+  if (m_trans_ac_t_adc_event.check()) {
+    if (!m_mode_dc_enabled) {
+      m_adc_fade_data.t = mp_ac_reg_options->t_adc/m_filter_update_interval;
+    }
   }
 
-  if (m_trans_iso_k_event.check()) {
-    m_iso_data.k = m_iso_k;
+  if (m_trans_ac_iso_k_event.check()) {
+    if (!m_mode_dc_enabled) {
+      m_iso_data.k = mp_ac_reg_options->iso_k;
+    }
   }
-  if (m_trans_iso_t_event.check()) {
-    //m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
-    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
+  if (m_trans_ac_iso_t_event.check()) {
+    if (!m_mode_dc_enabled) {
+      m_iso_data.fd.t = mp_ac_reg_options->iso_t / CNT_TO_DBLTIME(m_reg_interval);
+    }
   }
+
+  if (m_trans_dc_ki_event.check()) {
+    if (m_mode_dc_enabled) {
+      m_reg_pd.ki = mp_dc_reg_options->ki * CNT_TO_DBLTIME(m_reg_interval);
+    }
+  }
+  if (m_trans_dc_kd_event.check()) {
+    if (m_mode_dc_enabled) {
+      m_reg_pd.kd = mp_dc_reg_options->kd / CNT_TO_DBLTIME(m_reg_interval);
+    }
+  }
+  if (m_trans_dc_t_adc_event.check()) {
+    if (m_mode_dc_enabled) {
+      m_adc_fade_data.t = mp_dc_reg_options->t_adc/m_filter_update_interval;
+    }
+  }
+
+  if (m_trans_dc_iso_k_event.check()) {
+    if (m_mode_dc_enabled) {
+      m_iso_data.k = mp_dc_reg_options->iso_k;
+    }
+  }
+  if (m_trans_dc_iso_t_event.check()) {
+    if (m_mode_dc_enabled) {
+      m_iso_data.fd.t = mp_dc_reg_options->iso_t /
+        CNT_TO_DBLTIME(m_reg_interval);
+    }
+  }
+
   if (m_id_pass_event.check()) {
     irs_u16 id_pass = static_cast<irs_u16>(m_id_pass);
     if (id_pass == m_id_pass_src) {
@@ -2410,14 +2688,23 @@ void app_t<CFG>::in_tick()
     if (m_trans_contrast_nonv_event.check()) {
       m_nonvolatile_data.contrast = m_contrast;
     }
-    if (m_trans_k_nonv_event.check()) {
-      m_nonvolatile_data.k = m_k;
+    if (m_trans_ac_k_nonv_event.check()) {
+      m_nonvolatile_data.ac_k = mp_ac_reg_options->k;
     }
-    if (m_trans_ki_nonv_event.check()) {
-      m_nonvolatile_data.ki = m_ki;
+    if (m_trans_ac_ki_nonv_event.check()) {
+      m_nonvolatile_data.ac_ki = mp_ac_reg_options->ki;
     }
-    if (m_trans_kd_nonv_event.check()) {
-      m_nonvolatile_data.kd = m_kd;
+    if (m_trans_ac_kd_nonv_event.check()) {
+      m_nonvolatile_data.ac_kd = mp_ac_reg_options->kd;
+    }
+    if (m_trans_dc_k_nonv_event.check()) {
+      m_nonvolatile_data.dc_k = mp_dc_reg_options->k;
+    }
+    if (m_trans_dc_ki_nonv_event.check()) {
+      m_nonvolatile_data.dc_ki = mp_dc_reg_options->ki;
+    }
+    if (m_trans_dc_kd_nonv_event.check()) {
+      m_nonvolatile_data.dc_kd = mp_dc_reg_options->kd;
     }
     if (m_trans_current_limit_nonv_event.check()) {
       m_nonvolatile_data.current_limit = m_current_limit;
@@ -2464,8 +2751,11 @@ void app_t<CFG>::in_tick()
     if (m_trans_tuda_obratno_nonv_event.check()) {
       m_nonvolatile_data.tuda_obratno = m_scan_tuda_obratno;
     }
-    if (m_trans_need_meas_koef_nonv_event.check()) {
-      m_nonvolatile_data.need_meas_koef = m_need_meas_koef;
+    if (m_trans_ac_need_meas_koef_nonv_event.check()) {
+      m_nonvolatile_data.ac_need_meas_koef = mp_ac_reg_options->need_meas_koef;
+    }
+    if (m_trans_dc_need_meas_koef_nonv_event.check()) {
+      m_nonvolatile_data.dc_need_meas_koef = mp_dc_reg_options->need_meas_koef;
     }
     if (m_reset_nonvolatile_memory_nonv_event.check()) {
       m_nonvolatile_data.reset_nonvolatile_memory = m_reset_nonvolatile_memory;
@@ -2496,17 +2786,31 @@ void app_t<CFG>::in_tick()
         mp_generator->set_correct_freq_koef(1.0);
       }
     }
-    if (m_trans_t_adc_nonv_event.check()) {
-      m_nonvolatile_data.t_adc = m_t_adc;
+    if (m_trans_ac_t_adc_nonv_event.check()) {
+      m_nonvolatile_data.ac_t_adc = mp_ac_reg_options->t_adc;
     }
-    if (m_trans_iso_k_nonv_event.check()) {
-      m_nonvolatile_data.iso_k = m_iso_k;
+    if (m_trans_ac_iso_k_nonv_event.check()) {
+      m_nonvolatile_data.ac_iso_k = mp_ac_reg_options->iso_k;
     }
-    if (m_trans_iso_t_nonv_event.check()) {
-      m_nonvolatile_data.iso_t = m_iso_t;
+    if (m_trans_ac_iso_t_nonv_event.check()) {
+      m_nonvolatile_data.ac_iso_t = mp_ac_reg_options->iso_t;
     }
-    if (m_dead_band_nonv_event.check()) {
-      m_nonvolatile_data.dead_band = m_dead_band;
+    if (m_trans_ac_dead_band_nonv_event.check()) {
+      m_nonvolatile_data.ac_dead_band = mp_ac_reg_options->dead_band;
+    }
+
+
+    if (m_trans_dc_t_adc_nonv_event.check()) {
+      m_nonvolatile_data.dc_t_adc = mp_dc_reg_options->t_adc;
+    }
+    if (m_trans_dc_iso_k_nonv_event.check()) {
+      m_nonvolatile_data.dc_iso_k = mp_dc_reg_options->iso_k;
+    }
+    if (m_trans_dc_iso_t_nonv_event.check()) {
+      m_nonvolatile_data.dc_iso_t = mp_dc_reg_options->iso_t;
+    }
+    if (m_trans_dc_dead_band_nonv_event.check()) {
+      m_nonvolatile_data.dc_dead_band = mp_dc_reg_options->dead_band;
     }
     if (m_id_nonv_event.check()) {
       // Блокировка изменения идентификатора
@@ -2536,9 +2840,9 @@ void app_t<CFG>::in_tick()
 
   const irskey_t key = m_hot_kb_event.check();
 
-  /*if (key == m_key_Fn_up) {
+  if (key == m_key_S_down) {
     m_fast_adc_rms.show_sinus();
-  }*/
+  }
 
   if (test_switch_interface_mode(key)) {
     switch (m_interface_mode) {
@@ -2554,7 +2858,8 @@ void app_t<CFG>::in_tick()
         m_main_screen.hide_item(&m_meas_k_item);
         m_main_screen.show_item(&m_relay_string_item_1);
 
-        m_main_menu.hide_item(&m_reg_menu);
+        m_main_menu.hide_item(&m_ac_reg_menu);
+        m_main_menu.hide_item(&m_dc_reg_menu);
         m_main_menu.hide_item(&m_limit_menu);
         m_main_menu.hide_item(&m_scan_menu);
         m_main_menu.hide_item(&m_correct_menu);
@@ -2588,7 +2893,8 @@ void app_t<CFG>::in_tick()
         m_main_screen.show_item(&m_pwm_out_item);
         m_main_screen.show_item(&m_meas_k_item);
 
-        m_main_menu.show_item(&m_reg_menu);
+        m_main_menu.show_item(&m_ac_reg_menu);
+        m_main_menu.show_item(&m_dc_reg_menu);
         m_main_menu.show_item(&m_limit_menu);
         m_main_menu.show_item(&m_scan_menu);
         m_main_menu.show_item(&m_correct_menu);
@@ -3105,7 +3411,6 @@ void app_t<CFG>::out_tick()
   if (m_filter_update_interval_timer.check()) {
     //m_adc_value = m_adc_filter.get_value();
     m_adc_value = fabs(m_fast_adc_rms.get_slow_adc_voltage_code());
-    //IRS_LIB_DBG_MSG("m_adc_value = " << m_adc_value);
     m_voltage = adc_to_voltage(m_adc_value);
     //m_voltage = 9;
     if (m_voltage_filter_on) {
@@ -3291,18 +3596,21 @@ void app_t<CFG>::reg()
     m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
     if (m_can_reg) {
       const double cur_voltage_ref =
-        irs::rate_limiter(&m_rate_data, m_voltage_ref);
+        m_voltage_ref;//irs::rate_limiter(&m_rate_data, m_voltage_ref);
 
       const float e = cur_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
       bool exec_reg = true;
+      const double dead_band = get_actual_reg_options()->dead_band;
       if (m_interface_mode == DEBUG) {
         exec_reg = (m_voltage_ref != 0);
       } else {
         exec_reg = (m_voltage_ref != 0) &&
-          (abs(e/m_voltage_ref) > (m_dead_band/100));
+          (abs(e/m_voltage_ref) > (dead_band/100));
       }
       if (exec_reg) {
-        mp_generator->set_amplitude(pid_reg(&m_reg_pd, e));
+        double pid_reg_out = pid_reg(&m_reg_pd, e);
+        IRS_LIB_DBG_MSG("r  : e = " << e << " pid_reg_out = " << pid_reg_out);
+        mp_generator->set_amplitude(pid_reg_out);
       } else {
         pid_reg_sync(&m_reg_pd, e, mp_generator->get_amplitude());
       }
@@ -3319,20 +3627,50 @@ void app_t<CFG>::reg_with_meas()
     /*m_reg_timer.set(m_reg_interval);
     m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
     m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
-    if (!m_need_meas_koef || m_voltage < m_min_meas_k_voltage) {
-      m_meas_k = m_meas_k_default;
+    const bool need_meas_koef = get_actual_reg_options()->need_meas_koef;
+    if (!need_meas_koef || m_voltage < m_min_meas_k_voltage) {
+      m_meas_k = get_meas_k_default();
     } else {
       m_meas_k = m_reg_pd.prev_out / m_voltage;
     }
 
-    m_reg_pd.k = m_k * m_meas_k;
-    pid_reg_sync(&m_reg_pd);
+    const double k = get_actual_reg_options()->k;
+    if (m_reg_pd.k != k * m_meas_k) {
+      m_reg_pd.k = k * m_meas_k;
+      pid_reg_sync(&m_reg_pd);
+    }
     if (m_can_reg) {
       const double cur_voltage_ref =
-        irs::rate_limiter(&m_rate_data, m_voltage_ref);
+        m_voltage_ref;//irs::rate_limiter(&m_rate_data, m_voltage_ref);
       //IRS_LIB_DBG_MSG("cur_voltage_ref = " << cur_voltage_ref);
       float e = cur_voltage_ref - irs::isodr(&m_iso_data, m_voltage);
-      mp_generator->set_amplitude(pid_reg(&m_reg_pd, e));
+      static irs::pid_data_t reg_pd_copy = m_reg_pd;
+      if ((reg_pd_copy.k != m_reg_pd.k) ||
+          (reg_pd_copy.ki != m_reg_pd.ki) ||
+          (reg_pd_copy.kd != m_reg_pd.kd) ||
+          (reg_pd_copy.min != m_reg_pd.min) ||
+          (reg_pd_copy.max != m_reg_pd.max)) {
+        reg_pd_copy = m_reg_pd;
+        IRS_LIB_DBG_MSG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      }
+      static bool a = false;
+      if (!a) {
+        a = true;
+        IRS_LIB_DBG_MSG("m_reg_pd.k = " << m_reg_pd.k);
+        IRS_LIB_DBG_MSG("m_reg_pd.ki = " << m_reg_pd.ki);
+        IRS_LIB_DBG_MSG("m_reg_pd.kd = " << m_reg_pd.kd);
+        IRS_LIB_DBG_MSG("m_iso_data.k = " << m_iso_data.k);
+        IRS_LIB_DBG_MSG("m_iso_data.fd.t = " << m_iso_data.fd.t);
+      }
+      double pid_reg_out = pid_reg(&m_reg_pd, e);
+      //pid_reg_out = 0.0256609;
+      IRS_LIB_DBG_MSG("rwm: e = " << e << " pid_reg_out = " << pid_reg_out << " r " << cur_voltage_ref << " v = " << m_voltage);
+      /*static bool c = true;
+      if (c) {
+        c = false;
+        m_fast_adc_rms.show_sinus();
+      }*/
+      mp_generator->set_amplitude(pid_reg_out);
     }
 
     m_operating_duty = operating_duty();
@@ -3392,9 +3730,12 @@ irs_u16 app_t<CFG>::id()
 template <class CFG>
 void app_t<CFG>::reset_nonvolatile_memory()
 {
-  m_nonvolatile_data.k = 0.1f;//0.5f;
-  m_nonvolatile_data.ki = 0.5f;
-  m_nonvolatile_data.kd = 0.4f;
+  m_nonvolatile_data.ac_k = 0.08f;//0.5f;
+  m_nonvolatile_data.ac_ki = 5.f;
+  m_nonvolatile_data.ac_kd = 0.f;
+  m_nonvolatile_data.dc_k = 0.08f;//0.5f;
+  m_nonvolatile_data.dc_ki = 5.f;
+  m_nonvolatile_data.dc_kd = 0.f;
   m_nonvolatile_data.contrast = 0.15f;
   m_nonvolatile_data.current_limit = 1.5f;
   m_nonvolatile_data.termo_limit = 61.f;
@@ -3410,16 +3751,21 @@ void app_t<CFG>::reset_nonvolatile_memory()
   m_nonvolatile_data.need_meas_time = true;
   m_nonvolatile_data.correct_freq_by_time = true;
   m_nonvolatile_data.tuda_obratno = true;
-  m_nonvolatile_data.need_meas_koef = false;
+  m_nonvolatile_data.ac_need_meas_koef = false;
+  m_nonvolatile_data.dc_need_meas_koef = false;
   m_nonvolatile_data.reset_nonvolatile_memory = false;
   m_nonvolatile_data.reset_correct_nonvolatile_memory = false;
   m_nonvolatile_data.voltage_correct_enable = true;
   m_nonvolatile_data.freq_correct_enable = true;
   m_nonvolatile_data.freq_correct_koef = 16009408.f/16000000.f;
-  m_nonvolatile_data.t_adc = 0.1f;
-  m_nonvolatile_data.iso_k = 1.f;
-  m_nonvolatile_data.iso_t = 0.f;
-  m_nonvolatile_data.dead_band = 0.25f;
+  m_nonvolatile_data.ac_t_adc = 0.1f;
+  m_nonvolatile_data.ac_iso_k = 1.f;
+  m_nonvolatile_data.ac_iso_t = 1.f;
+  m_nonvolatile_data.ac_dead_band = 0.5f;
+  m_nonvolatile_data.dc_t_adc = 0.1f;
+  m_nonvolatile_data.dc_iso_k = 1.f;
+  m_nonvolatile_data.dc_iso_t = 1.f;
+  m_nonvolatile_data.dc_dead_band = 0.5f;
   m_nonvolatile_data.id = 0;
 }
 
