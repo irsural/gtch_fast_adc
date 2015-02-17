@@ -1849,12 +1849,6 @@
       <name>$PROJ_DIR$\gtch.h</name>
     </file>
     <file>
-      <name>$PROJ_DIR$\gtchadc.cpp</name>
-    </file>
-    <file>
-      <name>$PROJ_DIR$\gtchadc.h</name>
-    </file>
-    <file>
       <name>$PROJ_DIR$\gtchcfg.cpp</name>
     </file>
     <file>

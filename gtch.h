@@ -184,262 +184,6 @@ public:
   }
 };
 
-
-//------------------------------------------------------------------------------
-#ifdef NOP
-size_t shift_for_left_aligment_irs_i16(const irs_i16 a_value);
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-class sinus_generator_t //: public irs::generator_t
-{
-  typedef typename INT_GEN::counter_type period_t;
-  typedef typename INT_GEN::calc_type calc_period_t;
-  typedef ref_sinus_sample_t ref_sinus_sample_type;
-  typedef ref_sinus_sample_ponter_t ref_sinus_sample_ponter;
-
-  class point_interrupt_t: public mxfact_event_t
-  {
-    sinus_generator_t &m_outer;
-  public:
-    point_interrupt_t(sinus_generator_t &a_outer);
-    virtual void exec();
-  };
-  friend class point_interrupt_t;
-
-  const unsigned int m_max_value;
-  const float m_min_amplitude;
-  const float m_max_amplitude;
-  const float m_min_frequency;
-  const float m_max_frequency;
-  const float m_Kf;
-  const float m_ir2183_dead_time;
-  const size_t m_shift_alignment_irs_i16;
-  const float m_max_sinus_value;
-  enum { irs_u16_bits_count = 16 };
-  INT_GEN &m_int_generator;
-  irs::pwm_gen_t &m_pwm;
-  point_interrupt_t m_point_interrupt;
-
-  float m_frequency;
-  float m_amplitude;
-  irs_u16 m_current_point;
-  irs_u16 m_floor_interval;
-  irs_u8 m_floor_len;
-  irs_i16 m_sinus_array[NUM_OF_POINTS];
-  #ifndef FLASH_SINUS
-  ref_sinus_sample_type m_ref_sinus_array[NUM_OF_POINTS];
-  #endif //FLASH_SINUS
-  ref_sinus_sample_ponter mp_ref_sinus;
-  float m_freq_trans_koef;
-  float m_default_freq_trans_koef;
-
-  void point_interrupt();
-  void fill_sinus_array();
-  void apply_frequency();
-  inline irs_u16 get_interval()
-  {
-    return m_floor_interval;
-  }
-public:
-  sinus_generator_t(INT_GEN &a_int_generator, irs::pwm_gen_t &m_pwm);
-  ~sinus_generator_t();
-  virtual void start();
-  virtual void stop();
-  virtual void set_value(unsigned int a_value);
-  virtual void set_amplitude(float a_amplitude);
-  virtual float get_amplitude();
-  virtual void set_frequency(float a_frequency);
-  virtual unsigned int get_max_value();
-  virtual float get_max_amplitude();
-  virtual float get_max_frequency();
-  void set_correct_freq_koef(float a_correct_koef);
-};
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-sinus_generator_t<INT_GEN, NUM_OF_POINTS>::point_interrupt_t::
-  point_interrupt_t(sinus_generator_t<INT_GEN, NUM_OF_POINTS> &a_outer):
-  m_outer(a_outer)
-{
-  m_outer.m_int_generator.add_event(this);
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::point_interrupt_t::exec()
-{
-  mxfact_event_t::exec();
-  m_outer.point_interrupt();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-sinus_generator_t<INT_GEN, NUM_OF_POINTS>::
-  sinus_generator_t(INT_GEN &a_int_generator, irs::pwm_gen_t &a_pwm):
-  m_max_value(0),
-  m_min_amplitude(0.f),
-  m_max_amplitude(1.f),
-  m_min_frequency(45.f),
-  m_max_frequency(55.f),
-  m_Kf(2.f * IRS_PI / float(NUM_OF_POINTS)),
-  m_ir2183_dead_time(500e-9),
-  m_shift_alignment_irs_i16(shift_for_left_aligment_irs_i16(
-    static_cast<irs_i16>(a_pwm.get_max_duty()/2 -
-    m_ir2183_dead_time*a_pwm.get_timer_frequency()))),
-  m_max_sinus_value((a_pwm.get_max_duty()/2 -
-    m_ir2183_dead_time*a_pwm.get_timer_frequency())*
-    (1 << m_shift_alignment_irs_i16)),
-  m_int_generator(a_int_generator),
-  m_pwm(a_pwm),
-  m_point_interrupt(*this),
-  m_frequency(m_min_frequency),
-  m_amplitude(0.f),
-  m_current_point(0),
-  m_floor_interval(0),
-  m_floor_len(0),
-  #ifdef FLASH_SINUS
-  mp_ref_sinus(get_ref_sinus()),
-  #else //FLASH_SINUS
-  mp_ref_sinus(m_ref_sinus_array),
-  #endif //FLASH_SINUS
-  m_freq_trans_koef(0.f),
-  m_default_freq_trans_koef(0.f)
-{
-  irs::memsetex(m_sinus_array, NUM_OF_POINTS);
-  #ifndef FLASH_SINUS
-  for (irs_u16 i = 0; i < NUM_OF_POINTS; i++)
-  {
-    m_ref_sinus_array[i] = irs_i16(m_max_sinus_value * sin(m_Kf * i));
-  }
-  #endif //FLASH_SINUS
-
-  calc_period_t num = 0;
-  calc_period_t denom = 1;
-  m_int_generator.get_converting_koefs(&num, &denom);
-  m_freq_trans_koef = float(num) / float(denom);
-  m_default_freq_trans_koef = m_freq_trans_koef;
-  fill_sinus_array();
-  apply_frequency();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-sinus_generator_t<INT_GEN, NUM_OF_POINTS>::~sinus_generator_t()
-{
-  m_int_generator.stop();
-  m_pwm.stop();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::start()
-{
-  m_current_point = 0;
-  m_pwm.set_duty(irs_uarc(m_sinus_array[0])),
-  m_pwm.start();
-  m_int_generator.start();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::stop()
-{
-  m_pwm.stop();
-  m_int_generator.stop();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::set_value(unsigned int
-  /*a_value*/)
-{
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::set_amplitude(float a_amplitude)
-{
-  //
-  //a_amplitude = 0.f;
-  //
-  if (a_amplitude > m_max_amplitude) {
-    m_amplitude = m_max_amplitude;
-  } else if (a_amplitude < m_min_amplitude) {
-    m_amplitude = m_min_amplitude;
-  } else {
-    m_amplitude = a_amplitude;
-  }
-  fill_sinus_array();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-float sinus_generator_t<INT_GEN, NUM_OF_POINTS>::get_amplitude()
-{
-  return m_amplitude;
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::set_frequency(float a_frequency)
-{
-  if (a_frequency > m_max_frequency) {
-    m_frequency = m_max_frequency;
-  } else if (a_frequency < m_min_frequency) {
-    m_frequency = m_min_frequency;
-  } else {
-    m_frequency = a_frequency;
-  }
-  apply_frequency();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-unsigned int sinus_generator_t<INT_GEN, NUM_OF_POINTS>::get_max_value()
-{
-  return m_max_value;
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-float sinus_generator_t<INT_GEN, NUM_OF_POINTS>::get_max_amplitude()
-{
-  return m_max_amplitude;
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-float sinus_generator_t<INT_GEN, NUM_OF_POINTS>::get_max_frequency()
-{
-  return m_max_frequency;
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>
-  ::set_correct_freq_koef(float a_correct_koef)
-{
-  m_freq_trans_koef = m_default_freq_trans_koef * a_correct_koef;
-  apply_frequency();
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::point_interrupt()
-{
-  m_int_generator.set_interval(get_interval()-1);
-  m_pwm.set_duty(irs_uarc(irs_i16(m_pwm.get_max_duty()/2) +
-    irs_i16(m_sinus_array[m_current_point++])));
-
-  if (m_current_point >= NUM_OF_POINTS) {
-    m_current_point = 0;
-  }
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::fill_sinus_array()
-{
-  const irs_i16 A = irs_i16(m_amplitude*numeric_limits<irs_i16>::max());
-  for (irs_u16 i = 0; i < NUM_OF_POINTS; i++) {
-    m_sinus_array[i] = irs_i16(irs_i32(A * irs_i32(mp_ref_sinus[i])) >>
-     (irs_u16_bits_count - 1 + m_shift_alignment_irs_i16));
-  }
-}
-
-template <class INT_GEN, irs_u16 NUM_OF_POINTS>
-void sinus_generator_t<INT_GEN, NUM_OF_POINTS>::apply_frequency()
-{
-  const float float_floor_len = m_freq_trans_koef / m_frequency;
-  m_floor_interval = irs_u16(float_floor_len / float(NUM_OF_POINTS));
-  irs_u32 ceil_len = irs_u32(NUM_OF_POINTS) * irs_u32(m_floor_interval + 1);
-  irs_u32 floor_len = irs_u32(float_floor_len);
-  m_floor_len = (ceil_len - floor_len) / 4;
-}
-#endif // NOP
 //------------------------------------------------------------------------------
 
 class gtch_reg_t
@@ -492,8 +236,6 @@ public:
   void dec();
   void set_keys(const irskey_t a_key_inc, const irskey_t a_key_dec);
   void reset_step();
-  /*void set_min(const T& a_min);
-  void set_max(const T& a_max);*/
 private:
   enum process_t {
     INC,
@@ -625,28 +367,6 @@ void bounded_user_input_t<T>::reset_step()
   m_current_step = m_step;
 }
 
-/*void bounded_user_input_t<T>::set_min(const T& a_min)
-{
-  m_min = a_min;
-  if (m_var < m_min) {
-    m_var = m_min;
-    if (mp_event) {
-      mp_event->exec();
-    }
-  }
-}
-
-void bounded_user_input_t<T>::set_max(const T& a_max)
-{
-  m_max = a_max;
-  if (m_var > m_max) {
-    m_var = m_max;
-    if (mp_event) {
-      mp_event->exec();
-    }
-  }
-}*/
-
 //------------------------------------------------------------------------------
 
 struct reg_options_t
@@ -699,7 +419,6 @@ class app_t
   static const irs_u16 m_num_of_points = num_of_points;
   typedef typename CFG::int_generator_t int_generator_t;
 
-  //typedef typename adc_filter_t::adc_data_t adc_data_t;
   typedef double adc_data_t;
   typedef typename CFG::relay_interrupt_generator_t relay_interrupt_generator_t;
 
@@ -792,7 +511,6 @@ class app_t
   size_type m_delta_point_count;
   gtch::adc_rms_t m_fast_adc_rms;
   enum { interrupt_freq_boost_factor = 2 };
-  //sinus_generator_t<int_generator_t, m_num_of_points> m_sinus_generator;
   irs::handle_t<generator_t> mp_generator;
   mxdisplay_drv_t* mp_lcd_drv;
   mxdisplay_drv_service_t m_lcd_drv_service;
@@ -805,7 +523,6 @@ class app_t
   irs::loop_timer_t m_filter_update_interval_timer;
 
   adc_settings_t m_adc_settings;
-  //adc_filter_t m_adc_filter;
   irs::fade_data_t m_adc_fade_data;
   //  Non-volatile memory
   irs_uarc m_nonvolatile_data_size;
@@ -969,35 +686,10 @@ class app_t
   irs::handle_t<reg_options_t> mp_ac_reg_options;
   irs::handle_t<reg_options_t> mp_dc_reg_options;
 
-  //  К
-  /*double m_k;
-  irs_menu_double_item_t m_k_item;
-  //  Кi
-  double m_ki;
-  irs_menu_double_item_t m_ki_item;
-  //  Кd
-  double m_kd;
-  irs_menu_double_item_t m_kd_item;*/
-  //
   bool m_can_edit;
-  //  Переизмерение коэффициентов
-  //bool m_need_meas_koef;
-  //irs_menu_bool_item_t m_need_meas_koef_item;
-  //  Постоянная фильтра АЦП
-  //double m_t_adc;
-  //irs_menu_double_item_t m_t_adc_item;
   bool m_voltage_filter_on;
-  //  Изодромное звено: К
-  /*double m_iso_k;
-  irs_menu_double_item_t m_iso_k_item;
-  //  Изодромное звено: Т
-  double m_iso_t;
-  irs_menu_double_item_t m_iso_t_item;*/
   //  Изодромное звено
   irs::isodr_data_t m_iso_data;
-  // Зона нечувствительности
-  /*double m_dead_band;
-  irs_menu_double_item_t m_dead_band_item;*/
   //  АЦП
   adc_data_t m_adc_value;
   irs_menu_simply_item_t<adc_data_t> m_adc_item;
@@ -1058,16 +750,16 @@ class app_t
   direction_t m_scan_direction;
   //  Коррекция
   irs_advanced_menu_t m_correct_menu;
-  //  Разрешение коррекции напряжения
-  bool m_voltage_correct_enable;
-  irs_menu_bool_item_t m_voltage_correct_enable_item;
+  //  Разрешение коррекции переменного напряжения
+  bool m_ac_voltage_correct_enable;
+  irs_menu_bool_item_t m_ac_voltage_correct_enable_item;
   //  Коррекция напряжения
-  const bool m_voltage_correct_use_b_koefs;
-  const irs_u8 m_voltage_correct_start_pos;
-  irs::mxdata_t *mp_correct_nonvolatile_memory;
-  irs::correct_map_t<double, double, double, double> m_voltage_correct_map;
-  irs::correct_t<double, double, double, double> m_voltage_correct;
-  irs_menu_2param_master_item_t m_voltage_correct_item;
+  const bool m_ac_voltage_correct_use_b_koefs;
+  const irs_u8 m_ac_voltage_correct_start_pos;
+  irs::mxdata_t *mp_acv_correct_nonvolatile_memory;
+  irs::correct_map_t<double, double, double, double> m_ac_voltage_correct_map;
+  irs::correct_t<double, double, double, double> m_ac_voltage_correct;
+  irs_menu_2param_master_item_t m_ac_voltage_correct_item;
 
   //  Разрешение коррекции постоянного напряжения
   const double m_dc_voltage_ref_correct;
@@ -1119,7 +811,7 @@ class app_t
   mxfact_event_t m_trans_tuda_obratno_nonv_event;
   mxfact_event_t m_trans_ac_need_meas_koef_nonv_event;
   mxfact_event_t m_trans_dc_need_meas_koef_nonv_event;
-  mxfact_event_t m_trans_voltage_correct_enable_nonv_event;
+  mxfact_event_t m_trans_ac_voltage_correct_enable_nonv_event;
   mxfact_event_t m_trans_dc_voltage_correct_enable_nonv_event;
   mxfact_event_t m_trans_dc_voltage_correct_koef_event;
   mxfact_event_t m_trans_freq_correct_enable_nonv_event;
@@ -1153,8 +845,8 @@ class app_t
 
   bool m_reset_nonvolatile_memory;
   irs_menu_bool_item_t m_reset_nonvolatile_memory_item;
-  bool m_reset_correct_nonvolatile_memory;
-  irs_menu_bool_item_t m_reset_correct_nonvolatile_memory_item;
+  bool m_reset_acv_correct_nonvolatile_memory;
+  irs_menu_bool_item_t m_reset_acv_correct_nonvolatile_memory_item;
 
   void set_mode_ac();
   void set_mode_dc();
@@ -1232,8 +924,6 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_filter_update_interval(0.1),
   m_filter_update_interval_timer(irs::make_cnt_s(m_filter_update_interval)),
   m_adc_settings(m_cfg.get_adc_settings()),
-  //m_adc_filter(m_cfg.get_adc(), 0, m_adc_settings.sampling_time,
-    //m_adc_settings.filter_point_count, m_adc_settings.shift),
   m_adc_fade_data(),
   //  Nonvolatile memory
 
@@ -1347,35 +1037,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   mp_ac_reg_options(),
   mp_dc_reg_options(),
 
-  //  К
-  /*m_k(0.f),
-  m_k_item(&m_k, CAN_WRITE),
-  //  Кi
-  m_ki(0.f),
-  m_ki_item(&m_ki, CAN_WRITE),
-  //  Кd
-  m_kd(0.f),
-  m_kd_item(&m_kd, CAN_WRITE),*/
-  //
   m_can_edit(true),
-  //  Переизмерение коэффициентов
-  /*m_need_meas_koef(false),
-  m_need_meas_koef_item((irs_bool*)&m_need_meas_koef, m_can_edit),
-  //  Постоянная фильтра АЦП
-  m_t_adc(0.),
-  m_t_adc_item(&m_t_adc, CAN_WRITE),*/
   m_voltage_filter_on(false),
-  //  Изодромное звено: К
-  /*m_iso_k(0.),
-  m_iso_k_item(&m_iso_k, CAN_WRITE),
-  //  Изодромное звено: Т
-  m_iso_t(0.),
-  m_iso_t_item(&m_iso_t, CAN_WRITE),*/
   //  Изодромное звено
   m_iso_data(),
-  // Зона нечувствительности
-  /*m_dead_band(0.),
-  m_dead_band_item(&m_dead_band, CAN_WRITE),*/
   //  АЦП
   m_adc_value(0),
   m_adc_item(&m_adc_value),
@@ -1438,17 +1103,17 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   //  Коррекция
   m_correct_menu(),
   //  Разрешение коррекции напряжения
-  m_voltage_correct_enable(false),
-  m_voltage_correct_enable_item((irs_bool*)&m_voltage_correct_enable,
+  m_ac_voltage_correct_enable(false),
+  m_ac_voltage_correct_enable_item((irs_bool*)&m_ac_voltage_correct_enable,
     m_can_edit),
   //  Коррекция напряжения
-  m_voltage_correct_use_b_koefs(false),
-  m_voltage_correct_start_pos(0),
-  mp_correct_nonvolatile_memory(m_cfg.get_correct_nonvolatile_memory()),
-  m_voltage_correct_map(),
-  m_voltage_correct(mp_correct_nonvolatile_memory,
-    m_voltage_correct_start_pos, m_voltage_correct_use_b_koefs),
-  m_voltage_correct_item(m_freq, m_voltage_ref, m_voltage_display),
+  m_ac_voltage_correct_use_b_koefs(false),
+  m_ac_voltage_correct_start_pos(0),
+  mp_acv_correct_nonvolatile_memory(m_cfg.get_correct_nonvolatile_memory()),
+  m_ac_voltage_correct_map(),
+  m_ac_voltage_correct(mp_acv_correct_nonvolatile_memory,
+    m_ac_voltage_correct_start_pos, m_ac_voltage_correct_use_b_koefs),
+  m_ac_voltage_correct_item(m_freq, m_voltage_ref, m_voltage_display),
   //  Разрешение коррекции постоянного напряжения
   m_dc_voltage_ref_correct(200),
   m_dc_voltage_correct_enable(false),
@@ -1504,7 +1169,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_trans_tuda_obratno_nonv_event(),
   m_trans_ac_need_meas_koef_nonv_event(),
   m_trans_dc_need_meas_koef_nonv_event(),
-  m_trans_voltage_correct_enable_nonv_event(),
+  m_trans_ac_voltage_correct_enable_nonv_event(),
   m_trans_dc_voltage_correct_enable_nonv_event(),
   m_trans_dc_voltage_correct_koef_event(),
   m_trans_freq_correct_enable_nonv_event(),
@@ -1537,9 +1202,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_reset_nonvolatile_memory(false),
   m_reset_nonvolatile_memory_item(
     (irs_bool*)&m_reset_nonvolatile_memory, m_can_edit),
-  m_reset_correct_nonvolatile_memory(false),
-  m_reset_correct_nonvolatile_memory_item(
-    (irs_bool*)&m_reset_correct_nonvolatile_memory, m_can_edit)
+  m_reset_acv_correct_nonvolatile_memory(false),
+  m_reset_acv_correct_nonvolatile_memory_item(
+    (irs_bool*)&m_reset_acv_correct_nonvolatile_memory, m_can_edit)
 {
   mp_relay_interrupt_generator->add_event(&m_gtch_relay_interrupt);
 
@@ -1643,7 +1308,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_scan_tuda_obratno = m_nonvolatile_data.tuda_obratno;
   mp_ac_reg_options->need_meas_koef = m_nonvolatile_data.ac_need_meas_koef;
   mp_dc_reg_options->need_meas_koef = m_nonvolatile_data.dc_need_meas_koef;
-  m_voltage_correct_enable = m_nonvolatile_data.voltage_correct_enable;
+  m_ac_voltage_correct_enable = m_nonvolatile_data.voltage_correct_enable;
 
   m_dc_voltage_correct_enable = m_nonvolatile_data.dc_voltage_correct_enable;
   m_dc_voltage_correct = m_dc_voltage_ref_correct*
@@ -1704,17 +1369,6 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.add(&m_need_meas_time_item, SHOW_ITEM);
   m_main_menu.add(&m_correct_freq_by_time_item, SHOW_ITEM);
   m_main_menu.add(&m_tuda_obratno_item, SHOW_ITEM);
-  //  Меню регулятора
-  /*m_reg_menu.set_header("Меню регулятора");
-  m_reg_menu.add(&m_k_item);
-  m_reg_menu.add(&m_ki_item);
-  m_reg_menu.add(&m_kd_item);
-  m_reg_menu.add(&m_need_meas_koef_item);
-  m_reg_menu.add(&m_t_adc_item);
-  m_reg_menu.add(&m_iso_k_item);
-  m_reg_menu.add(&m_iso_t_item);
-  m_reg_menu.add(&m_dead_band_item);
-  */
 
   //  Меню регулятора
   m_ac_reg_menu.set_header("Меню AC регулят.");
@@ -1804,8 +1458,6 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_contrast_item.set_disp_drv(&m_lcd_drv_service);
   m_contrast_item.set_cursor_symbol(0x01);
 
-  //mp_ac_reg_options.reset(new reg_options_t(mp_user_str, mp_exit_msg,
-    //m_menu_item_width, m_menu_item_prec));
   mp_ac_reg_options->k_item.add_change_event(&m_trans_ac_k_nonv_event);
   mp_ac_reg_options->ki_item.add_change_event(&m_trans_ac_ki_event);
   mp_ac_reg_options->ki_item.add_change_event(&m_trans_ac_ki_nonv_event);
@@ -1838,90 +1490,6 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   mp_dc_reg_options->dead_band_item.add_change_event(
     &m_trans_dc_dead_band_nonv_event);
 
-  //  К
-  /*m_k_item.set_header("Проп. коэф.");
-  m_k_item.set_message(mp_exit_msg);
-  m_k_item.set_str(mp_user_str, "Кп", "",
-    m_menu_item_width, m_menu_item_prec);
-  m_k_item.set_max_value(1000.0);
-  m_k_item.set_min_value(0.0);
-  m_k_item.add_change_event(&m_trans_ac_k_nonv_event);
-  m_k_item.set_key_type(IMK_ARROWS);
-  m_k_item.set_change_step(0.01f);
-  //  Кi
-  m_ki_item.set_header("Инт. коэф.");
-  m_ki_item.set_message(mp_exit_msg);
-  m_ki_item.set_str(mp_user_str, "Кi", "c-1",
-    m_menu_item_width, m_menu_item_prec);
-  m_ki_item.set_max_value(1000.0);
-  m_ki_item.set_min_value(0.0);
-  m_ki_item.add_change_event(&m_trans_ac_ki_event);
-  m_ki_item.add_change_event(&m_trans_ac_ki_nonv_event);
-  m_ki_item.set_key_type(IMK_ARROWS);
-  m_ki_item.set_change_step(0.01f);
-  //  Кd
-  m_kd_item.set_header("Диф. коэф");
-  m_kd_item.set_message(mp_exit_msg);
-  m_kd_item.set_str(mp_user_str, "Кd", "c",
-    m_menu_item_width, m_menu_item_prec);
-  m_kd_item.set_max_value(1000.0);
-  m_kd_item.set_min_value(0.0);
-  m_kd_item.add_change_event(&m_trans_ac_kd_event);
-  m_kd_item.add_change_event(&m_trans_ac_kd_nonv_event);
-  m_kd_item.set_key_type(IMK_ARROWS);
-  m_kd_item.set_change_step(0.01f);
-  //  Переизмерение коэффициентов
-  m_need_meas_koef_item.set_header("Изм. коэф.");
-  m_need_meas_koef_item.set_str("Включено", "Выключено");
-  m_need_meas_koef_item.add_change_event(&m_trans_ac_need_meas_koef_nonv_event);
-  //  Постоянная фильтра АЦП
-  m_t_adc_item.set_header("Пост. фильтра напр.");
-  m_t_adc_item.set_message(mp_exit_msg);
-  m_t_adc_item.set_str(mp_user_str, "T ", "с",
-    m_menu_item_width, m_menu_item_prec);
-  m_t_adc_item.set_max_value(20.0);
-  m_t_adc_item.set_min_value(0.0);
-  m_t_adc_item.set_key_type(IMK_ARROWS);
-  m_t_adc_item.set_change_step(0.05f);
-  m_t_adc_item.add_change_event(&m_trans_ac_t_adc_event);
-  m_t_adc_item.add_change_event(&m_trans_ac_t_adc_nonv_event);
-  //  Изодромное звено
-  m_iso_data.k = m_iso_k;
-  m_iso_data.fd.x1 = 0.;
-  m_iso_data.fd.y1 = 0.;
-  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
-  //  Изодромное звено: К
-  m_iso_k_item.set_header("Изодр. коэф.");
-  m_iso_k_item.set_message(mp_exit_msg);
-  m_iso_k_item.set_str(mp_user_str, "Киз", "",
-    m_menu_item_width, m_menu_item_prec);
-  m_iso_k_item.set_max_value(1000.0);
-  m_iso_k_item.set_min_value(0.);
-  m_iso_k_item.set_key_type(IMK_ARROWS);
-  m_iso_k_item.set_change_step(0.05f);
-  m_iso_k_item.add_change_event(&m_trans_ac_iso_k_event);
-  m_iso_k_item.add_change_event(&m_trans_ac_iso_k_nonv_event);
-  //  Изодромное звено: Т
-  m_iso_t_item.set_header("Изодр. пост. вр.");
-  m_iso_t_item.set_message(mp_exit_msg);
-  m_iso_t_item.set_str(mp_user_str, "Тиз", "с",
-    m_menu_item_width, m_menu_item_prec);
-  m_iso_t_item.set_max_value(1000.0);
-  m_iso_t_item.set_min_value(0.0);
-  m_iso_t_item.set_key_type(IMK_ARROWS);
-  m_iso_t_item.set_change_step(0.05f);
-  m_iso_t_item.add_change_event(&m_trans_ac_iso_t_event);
-  m_iso_t_item.add_change_event(&m_trans_ac_iso_t_nonv_event);
-  // Зона нечувствительности
-  m_dead_band_item.set_header("Мертвая зона");
-  m_dead_band_item.set_message(mp_exit_msg);
-  m_dead_band_item.set_str(mp_user_str, "V", "%",
-    m_menu_item_width, m_menu_item_prec);
-  m_dead_band_item.set_max_value(10.0);
-  m_dead_band_item.set_min_value(0.0);
-  m_dead_band_item.set_key_type(IMK_ARROWS);
-  m_dead_band_item.set_change_step(0.05f);
-  m_dead_band_item.add_change_event(&m_trans_ac_dead_band_nonv_event);*/
   //  АЦП
   m_adc_item.set_str(mp_user_str, "АЦП", "", m_adc_item_width, m_adc_item_prec);
   //  ШИМ
@@ -1978,33 +1546,33 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_relay_contact_prev = mp_relay_contact_pin->pin();
   //  Коррекция
   m_correct_menu.set_header("Коррекция");
-  m_correct_menu.add(&m_voltage_correct_enable_item);
-  m_correct_menu.add(&m_voltage_correct_item);
+  m_correct_menu.add(&m_ac_voltage_correct_enable_item);
+  m_correct_menu.add(&m_ac_voltage_correct_item);
   m_correct_menu.add(&m_dc_voltage_correct_enable_item);
   m_correct_menu.add(&m_dc_voltage_correct_item);
   m_correct_menu.add(&m_freq_correct_enable_item);
   m_correct_menu.add(&m_freq_correct_item);
   //  Разрешение коррекции напряжения
-  m_voltage_correct_enable_item.set_header("Исп.коррекцию ACV");
-  m_voltage_correct_enable_item.set_str("Использовать", "Не использовать");
-  m_voltage_correct_enable_item.add_change_event(
-    &m_trans_voltage_correct_enable_nonv_event);
+  m_ac_voltage_correct_enable_item.set_header("Исп.коррекцию ACV");
+  m_ac_voltage_correct_enable_item.set_str("Использовать", "Не использовать");
+  m_ac_voltage_correct_enable_item.add_change_event(
+    &m_trans_ac_voltage_correct_enable_nonv_event);
   //  Коррекция напряжения
-  m_voltage_correct_item.set_header("Коррекция ACV");
-  m_voltage_correct_item.set_str(mp_user_str,
+  m_ac_voltage_correct_item.set_header("Коррекция ACV");
+  m_ac_voltage_correct_item.set_str(mp_user_str,
     m_v_correct_item_width, m_v_correct_item_prec);
-  m_voltage_correct_item.set_param_1_str("F", "Гц", IMM_WITHOUT_SUFFIX);
-  m_voltage_correct_item.set_param_2_str("Uo", "В", IMM_WITHOUT_SUFFIX);
-  m_voltage_correct_item.set_param_out_str("Uн", "В", IMM_FULL);
-  m_voltage_correct_item.set_limit_values(m_min_ac_voltage_release - 10.,
+  m_ac_voltage_correct_item.set_param_1_str("F", "Гц", IMM_WITHOUT_SUFFIX);
+  m_ac_voltage_correct_item.set_param_2_str("Uo", "В", IMM_WITHOUT_SUFFIX);
+  m_ac_voltage_correct_item.set_param_out_str("Uн", "В", IMM_FULL);
+  m_ac_voltage_correct_item.set_limit_values(m_min_ac_voltage_release - 10.,
     m_max_ac_voltage_release + 10.);
-  m_voltage_correct_item.set_step(0.01);
-  m_voltage_correct_item.set_start_key(static_cast<irskey_t>(m_key_start));
-  m_voltage_correct_item.set_stop_key(static_cast<irskey_t>(m_key_stop));
+  m_ac_voltage_correct_item.set_step(0.01);
+  m_ac_voltage_correct_item.set_start_key(static_cast<irskey_t>(m_key_start));
+  m_ac_voltage_correct_item.set_stop_key(static_cast<irskey_t>(m_key_stop));
 
   const irs_uarc correct_size =
-    m_voltage_correct_map.connect(mp_correct_nonvolatile_memory,
-    m_voltage_correct_start_pos, m_voltage_correct_use_b_koefs);
+    m_ac_voltage_correct_map.connect(mp_acv_correct_nonvolatile_memory,
+    m_ac_voltage_correct_start_pos, m_ac_voltage_correct_use_b_koefs);
 
   if (nonvolatile_memory_error || need_reset_correct_nonvolatile_memory) {
     if (nonvolatile_memory_error) {
@@ -2015,25 +1583,25 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   }
 
   irs::mlog() << irsm("Размер EEPROM коррекции в байтах: ");
-  irs::mlog() << mp_correct_nonvolatile_memory->size() << endl;
+  irs::mlog() << mp_acv_correct_nonvolatile_memory->size() << endl;
   irs::mlog() << irsm("Размер параметров коррекции в байтах: ");
   irs::mlog() << correct_size << endl;
-  if (correct_size > mp_correct_nonvolatile_memory->size()) {
+  if (correct_size > mp_acv_correct_nonvolatile_memory->size()) {
     GTCH_DBG_MSG(irsm("Размер EEPROM коррекции недостаточен для хранения"));
     GTCH_DBG_MSG(irsm(" всех перменных") << endl);
     for (;;);
   }
 
-  m_voltage_correct_item.reserve(m_voltage_correct_map.m_y_count*
-    m_voltage_correct_map.m_x_count);
-  for (irs_u8 u = 1; u < m_voltage_correct_map.m_y_count; u++) {
-    for (irs_u8 f = 0; f < m_voltage_correct_map.m_x_count; f++) {
-      double f_value = m_voltage_correct_map.mp_x_points[f];
-      double u_value = m_voltage_correct_map.mp_y_points[u];
-      double k = m_voltage_correct_map.mp_k_array[
-        u * m_voltage_correct_map.m_x_count + f];
+  m_ac_voltage_correct_item.reserve(m_ac_voltage_correct_map.m_y_count*
+    m_ac_voltage_correct_map.m_x_count);
+  for (irs_u8 u = 1; u < m_ac_voltage_correct_map.m_y_count; u++) {
+    for (irs_u8 f = 0; f < m_ac_voltage_correct_map.m_x_count; f++) {
+      double f_value = m_ac_voltage_correct_map.mp_x_points[f];
+      double u_value = m_ac_voltage_correct_map.mp_y_points[u];
+      double k = m_ac_voltage_correct_map.mp_k_array[
+        u * m_ac_voltage_correct_map.m_x_count + f];
       double out_value = u_value * k;
-      m_voltage_correct_item.add_point(f_value, u_value, out_value);
+      m_ac_voltage_correct_item.add_point(f_value, u_value, out_value);
     }
   }
   //  Разрешение коррекции постоянного напряжения
@@ -2123,12 +1691,12 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     &m_reset_nonvolatile_memory_nonv_event);
   m_main_menu.add(&m_reset_nonvolatile_memory_item);
   m_main_menu.hide_item(&m_reset_nonvolatile_memory_item);
-  m_reset_correct_nonvolatile_memory_item.set_header("Сбросить корр. U");
-  m_reset_correct_nonvolatile_memory_item.set_str("Да", "Нет");
-  m_reset_correct_nonvolatile_memory_item.add_change_event(
+  m_reset_acv_correct_nonvolatile_memory_item.set_header("Сбросить корр. ACV");
+  m_reset_acv_correct_nonvolatile_memory_item.set_str("Да", "Нет");
+  m_reset_acv_correct_nonvolatile_memory_item.add_change_event(
     &m_reset_correct_nonvolatile_memory_nonv_event);
-  m_main_menu.add(&m_reset_correct_nonvolatile_memory_item);
-  m_main_menu.hide_item(&m_reset_correct_nonvolatile_memory_item);
+  m_main_menu.add(&m_reset_acv_correct_nonvolatile_memory_item);
+  m_main_menu.hide_item(&m_reset_acv_correct_nonvolatile_memory_item);
 
   //!!! Не забыть включить обратно
   //mp_window_watchdog->start();
@@ -2139,13 +1707,10 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_end_saved_copy = m_freq_end;
   m_speed_freq_saved_copy = m_speed_freq;
   m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
-  //m_mode_dc_enabled_previous = m_mode_dc_enabled;
-
 
   update_configuration_for_mode_dc_ac();
 
   //  АЦП
-  //m_adc_filter.restart();
   const reg_options_t* reg_opt = get_actual_reg_options();
   m_adc_fade_data.x1 = 0.;
   m_adc_fade_data.y1 = 0.;
@@ -2341,10 +1906,7 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
     m_cfg.get_adc()->get_u16_maximum()*100;
   #else // Плата ГТЧ
   // Коэффициент подобран экспериментально при U = 51.4 В
-  //const float experimental_factor = 43.07247;
   const float experimental_factor = 122.995831;
-  //float a = static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum());
-  //IRS_LIB_DBG_MSG("A = " << a);
   const float k = experimental_factor*
     (m_adc_settings.v_reference/
      static_cast<irs_i16>(m_cfg.get_adc()->get_u16_maximum()));
@@ -2356,8 +1918,8 @@ float app_t<CFG>::adc_to_voltage(adc_data_t a_adc)
       voltage = voltage*m_nonvolatile_data.dc_voltage_correct_koef;
     }
   } else {
-    if (m_voltage_correct_enable && (mp_cur_menu != &m_voltage_correct_item)) {
-      voltage = m_voltage_correct.apply(m_freq, voltage, voltage);
+    if (m_ac_voltage_correct_enable && (mp_cur_menu != &m_ac_voltage_correct_item)) {
+      voltage = m_ac_voltage_correct.apply(m_freq, voltage, voltage);
     }
   }
   return voltage;
@@ -2381,35 +1943,14 @@ void app_t<CFG>::to_stop()
   mp_relay_interrupt_generator->stop();
   m_freq = m_freq_begin;
   m_operating_duty = false;
-  if (mp_cur_menu == &m_voltage_correct_item) {
-    m_voltage_correct_item.external_process_stop();
+  if (mp_cur_menu == &m_ac_voltage_correct_item) {
+    m_ac_voltage_correct_item.external_process_stop();
   }
 }
 
 template <class CFG>
 void app_t<CFG>::to_start()
 {
-  /*m_mode_dc_enabled = false;
-  update_configuration_for_mode_dc_ac();
-  m_mode_dc_enabled = true;
-  update_configuration_for_mode_dc_ac();*/
-  //-----------------------------------------------
-  //m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_ac);
-  /*mp_generator.reset();
-  mp_generator.reset(new sinus_generator_t(&m_interrupt_generator,
-    interrupt_freq_boost_factor, &m_sinus_pwm,
-    CFG::sinus_pwm_frequency, m_cfg.m_ir2183_dead_time, CFG::sinus_size));
-
-  m_fast_adc_rms.set_current_type(gtch::adc_rms_t::current_type_dc);
-  mp_generator.reset();
-  mp_generator.reset(new dc_generator_t(&m_sinus_pwm,
-    m_cfg.m_ir2183_dead_time));*/
-
-
-  //-----------------------------------------------
-
-
-
   m_rate_data.cur = m_voltage;
 
   const reg_options_t* reg_opt = get_actual_reg_options();
@@ -2418,11 +1959,6 @@ void app_t<CFG>::to_start()
   m_reg_pd.k = reg_opt->k * m_meas_k;
   m_reg_pd.ki = reg_opt->ki * CNT_TO_DBLTIME(m_reg_interval);
   m_reg_pd.kd = reg_opt->kd / CNT_TO_DBLTIME(m_reg_interval);
-  //float e = m_voltage_ref - m_voltage;
-
-  /*m_reg_timer.set(m_meas_interval);
-  m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_meas_interval);
-  m_rate_data.dt = CNT_TO_DBLTIME(m_meas_interval);*/
   m_reg_timer.set(m_reg_interval);
 
   m_iso_data.k = reg_opt->iso_k;
@@ -2438,7 +1974,6 @@ void app_t<CFG>::to_start()
   m_overcurrent_detection_enabled = true;
 
   m_reg_timer.start();
-  IRS_LIB_DBG_MSG("-----------start---------");
 }
 
 template <class CFG>
@@ -2457,8 +1992,8 @@ void app_t<CFG>::to_overheat()
   mp_relay_interrupt_generator->stop();
   m_freq = m_freq_begin;
   m_buzzer.bzzz();
-  if (mp_cur_menu == &m_voltage_correct_item) {
-    m_voltage_correct_item.external_process_stop();
+  if (mp_cur_menu == &m_ac_voltage_correct_item) {
+    m_ac_voltage_correct_item.external_process_stop();
   }
 }
 
@@ -2669,8 +2204,8 @@ void app_t<CFG>::in_tick()
   if (m_status != OVERHEAT) {
     if (m_temperature > m_termo_limit) {
       to_overheat();
-      if (mp_cur_menu == &m_voltage_correct_item) {
-        m_voltage_correct_item.external_process_stop();
+      if (mp_cur_menu == &m_ac_voltage_correct_item) {
+        m_ac_voltage_correct_item.external_process_stop();
       }
     }
   }
@@ -2835,10 +2370,10 @@ void app_t<CFG>::in_tick()
     }
     if (m_reset_correct_nonvolatile_memory_nonv_event.check()) {
       m_nonvolatile_data.reset_correct_nonvolatile_memory =
-        m_reset_correct_nonvolatile_memory;
+        m_reset_acv_correct_nonvolatile_memory;
     }
-    if (m_trans_voltage_correct_enable_nonv_event.check()) {
-      m_nonvolatile_data.voltage_correct_enable = m_voltage_correct_enable;
+    if (m_trans_ac_voltage_correct_enable_nonv_event.check()) {
+      m_nonvolatile_data.voltage_correct_enable = m_ac_voltage_correct_enable;
     }
     if (m_trans_dc_voltage_correct_koef_event.check()) {
       const float koef = m_dc_voltage_correct / m_dc_voltage_ref_correct;
@@ -2907,23 +2442,19 @@ void app_t<CFG>::in_tick()
 
 
   //  Коррекция - еепром
-  if (mp_cur_menu == &m_voltage_correct_item) {
-    if (m_voltage_correct_item.check_out_param_change()) {
+  if (mp_cur_menu == &m_ac_voltage_correct_item) {
+    if (m_ac_voltage_correct_item.check_out_param_change()) {
       size_t point = 0;
       double user_value = 0.;
-      m_voltage_correct_item.get_last_point(point, user_value);
-      irs_u8 u = point / m_voltage_correct_map.m_x_count;
-      double u_value = m_voltage_correct_map.mp_y_points[u+1];
-      m_voltage_correct_map.mp_k_array[point + m_voltage_correct_map.m_x_count]
+      m_ac_voltage_correct_item.get_last_point(point, user_value);
+      irs_u8 u = point / m_ac_voltage_correct_map.m_x_count;
+      double u_value = m_ac_voltage_correct_map.mp_y_points[u+1];
+      m_ac_voltage_correct_map.mp_k_array[point + m_ac_voltage_correct_map.m_x_count]
         = user_value / u_value;
     }
   }
 
   const irskey_t key = m_hot_kb_event.check();
-
-  /*if (key == m_key_S_down) {
-    m_fast_adc_rms.show_sinus();
-  }*/
 
   if (test_switch_interface_mode(key)) {
     switch (m_interface_mode) {
@@ -2948,17 +2479,12 @@ void app_t<CFG>::in_tick()
         m_main_menu.hide_item(&m_correct_menu);
         m_main_menu.hide_item(&m_id_pass_item);
         m_main_menu.hide_item(&m_reset_nonvolatile_memory_item);
-        m_main_menu.hide_item(&m_reset_correct_nonvolatile_memory_item);
+        m_main_menu.hide_item(&m_reset_acv_correct_nonvolatile_memory_item);
         m_main_menu.hide_item(&m_contrast_item);
         m_main_menu.show_item(&m_go_to_end_item);
         m_main_menu.show_item(&m_need_meas_time_item);
         m_main_menu.show_item(&m_correct_freq_by_time_item);
         m_main_menu.show_item(&m_tuda_obratno_item);
-
-        /*m_min_voltage = m_min_ac_voltage_release;
-        m_max_voltage = m_max_ac_voltage_release;
-        if (m_voltage_ref < m_min_voltage) m_voltage_ref = m_min_voltage;
-        if (m_voltage_ref > m_max_voltage) m_voltage_ref = m_max_voltage;*/
         strcpy(mp_relay_string_2, "");
         m_can_reg = true;
         m_interface_mode = RELEASE;
@@ -2985,15 +2511,12 @@ void app_t<CFG>::in_tick()
         m_main_menu.show_item(&m_correct_menu);
         m_main_menu.show_item(&m_id_pass_item);
         m_main_menu.show_item(&m_reset_nonvolatile_memory_item);
-        m_main_menu.show_item(&m_reset_correct_nonvolatile_memory_item);
+        m_main_menu.show_item(&m_reset_acv_correct_nonvolatile_memory_item);
         m_main_menu.show_item(&m_contrast_item);
         m_main_menu.hide_item(&m_go_to_end_item);
         m_main_menu.hide_item(&m_need_meas_time_item);
         m_main_menu.hide_item(&m_correct_freq_by_time_item);
         m_main_menu.hide_item(&m_tuda_obratno_item);
-
-        //m_min_voltage = m_min_ac_voltage_debug;
-        //m_max_voltage = m_max_ac_voltage_debug;
         strcpy(mp_relay_string_2, "<СТОП>");
         m_interface_mode = DEBUG;
         break;
@@ -3044,8 +2567,8 @@ void app_t<CFG>::in_tick()
           mp_generator->set_frequency(m_freq);
           to_start();
         }
-      } else if (mp_cur_menu == &m_voltage_correct_item) {
-        if (m_voltage_correct_item.check_process_start())
+      } else if (mp_cur_menu == &m_ac_voltage_correct_item) {
+        if (m_ac_voltage_correct_item.check_process_start())
         {
           set_mode_ac();
           m_status = CORRECT_ACV_SETUP_MEAS;
@@ -3053,7 +2576,7 @@ void app_t<CFG>::in_tick()
           to_start();
         }
         if (key == m_key_Fn_up) {
-          m_voltage_correct_item.reset_cur_param_to(
+          m_ac_voltage_correct_item.reset_cur_param_to(
             irs_menu_2param_master_item_t::value_second);
         }
       } else if (mp_cur_menu == &m_dc_voltage_correct_item) {
@@ -3074,30 +2597,30 @@ void app_t<CFG>::in_tick()
       break;
     }
     case CORRECT_ACV_SETUP_MEAS: {
-      if (m_voltage_correct_item.check_process_stop())
+      if (m_ac_voltage_correct_item.check_process_stop())
       {
-        m_voltage_correct_item.set_operating_duty(false);
+        m_ac_voltage_correct_item.set_operating_duty(false);
         to_stop();
       } else {
         reg_with_meas();
         if (m_operating_duty) {
-          m_voltage_correct_item.set_operating_duty(true);
+          m_ac_voltage_correct_item.set_operating_duty(true);
           to_correct_pause();
         }
-        if (m_voltage_correct_item.check_process_change_param()) {
+        if (m_ac_voltage_correct_item.check_process_change_param()) {
           mp_generator->set_frequency(m_freq);
         }
       }
       break;
     }
     case CORRECT_ACV_PAUSE: {
-      if (m_voltage_correct_item.check_process_stop()) {
-        m_voltage_correct_item.set_operating_duty(false);
+      if (m_ac_voltage_correct_item.check_process_stop()) {
+        m_ac_voltage_correct_item.set_operating_duty(false);
         to_stop();
       } else {
         reg();
-        m_voltage_correct_item.set_operating_duty(m_operating_duty);
-        if (m_voltage_correct_item.check_process_change_param()) {
+        m_ac_voltage_correct_item.set_operating_duty(m_operating_duty);
+        if (m_ac_voltage_correct_item.check_process_change_param()) {
           mp_generator->set_frequency(m_freq);
         }
       }
@@ -3143,9 +2666,9 @@ void app_t<CFG>::in_tick()
       if (mp_cur_menu == &m_main_screen) {
         switch_key(key);
       }
-      if (mp_cur_menu == &m_voltage_correct_item) {
-        if (m_voltage_correct_item.check_process_start()) {
-          m_voltage_correct_item.external_process_stop();
+      if (mp_cur_menu == &m_ac_voltage_correct_item) {
+        if (m_ac_voltage_correct_item.check_process_start()) {
+          m_ac_voltage_correct_item.external_process_stop();
         }
       }
       break;
@@ -3495,7 +3018,6 @@ void app_t<CFG>::tick()
   m_keyboard_event_gen.tick();
   (*mp_debug_led)();
   m_cfg.tick();
-  //m_adc_filter.tick();
   m_fast_adc_rms.tick();
   m_buzzer.tick();
   bool is_main_srceen_cur = (mp_cur_menu == &m_main_screen);
@@ -3521,10 +3043,8 @@ void app_t<CFG>::out_tick()
   }
 
   if (m_filter_update_interval_timer.check()) {
-    //m_adc_value = m_adc_filter.get_value();
     m_adc_value = fabs(m_fast_adc_rms.get_slow_adc_voltage_code());
     m_voltage = adc_to_voltage(m_adc_value);
-    //m_voltage = 9;
     if (m_voltage_filter_on) {
       m_voltage_display = fade(&m_adc_fade_data, m_voltage);
     } else {
@@ -3703,9 +3223,6 @@ void app_t<CFG>::reg()
 {
   if (m_reg_timer.check()) {
     m_reg_timer.start();
-    /*m_reg_timer.set(m_reg_interval);
-    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
-    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
     if (m_can_reg) {
       const double cur_voltage_ref =
         m_voltage_ref;//irs::rate_limiter(&m_rate_data, m_voltage_ref);
@@ -3735,9 +3252,6 @@ void app_t<CFG>::reg_with_meas()
 {
   if (m_reg_timer.check()) {
     m_reg_timer.start();
-    /*m_reg_timer.set(m_reg_interval);
-    m_iso_data.fd.t = m_iso_t / CNT_TO_DBLTIME(m_reg_interval);
-    m_rate_data.dt = CNT_TO_DBLTIME(m_reg_interval);*/
     const bool need_meas_koef = get_actual_reg_options()->need_meas_koef;
     if (!need_meas_koef || m_voltage < m_min_meas_k_voltage) {
       m_meas_k = get_meas_k_default();
@@ -3815,10 +3329,10 @@ irs_u16 app_t<CFG>::id()
 template <class CFG>
 void app_t<CFG>::reset_nonvolatile_memory()
 {
-  m_nonvolatile_data.ac_k = 0.55f;//0.08f;//0.5f;
+  m_nonvolatile_data.ac_k = 0.55f;
   m_nonvolatile_data.ac_ki = 5.f;
   m_nonvolatile_data.ac_kd = 0.f;
-  m_nonvolatile_data.dc_k = 0.5f;//0.08f;//0.5f;
+  m_nonvolatile_data.dc_k = 0.5f;
   m_nonvolatile_data.dc_ki = 4.99f;
   m_nonvolatile_data.dc_kd = 0.f;
   m_nonvolatile_data.contrast = 0.15f;
@@ -3864,39 +3378,28 @@ irs_uarc app_t<CFG>::reset_correct_nonvolatile_memory()
   id[1] = 'T';
   id[2] = 'C';
   id[3] = 'H';
-  m_voltage_correct_map.m_map_id = *(irs_u32*)id;
-  m_voltage_correct_map.m_x_count = 2;
-  m_voltage_correct_map.m_y_count = 3;
+  m_ac_voltage_correct_map.m_map_id = *(irs_u32*)id;
+  m_ac_voltage_correct_map.m_x_count = 2;
+  m_ac_voltage_correct_map.m_y_count = 3;
 
   const irs_uarc correct_size =
-    m_voltage_correct_map.connect(mp_correct_nonvolatile_memory,
-    m_voltage_correct_start_pos, m_voltage_correct_use_b_koefs);
+    m_ac_voltage_correct_map.connect(mp_acv_correct_nonvolatile_memory,
+    m_ac_voltage_correct_start_pos, m_ac_voltage_correct_use_b_koefs);
 
-  /*m_voltage_correct_map.mp_x_points[0] = 45.00;
-  m_voltage_correct_map.mp_x_points[1] = 48.00;
-  m_voltage_correct_map.mp_x_points[2] = 52.00;
-  m_voltage_correct_map.mp_x_points[3] = 55.00;
-  m_voltage_correct_map.mp_y_points[0] = 0.000;
-  m_voltage_correct_map.mp_y_points[1] = 30.00;
-  m_voltage_correct_map.mp_y_points[2] = 50.00;
-  m_voltage_correct_map.mp_y_points[3] = 80.00;
-  m_voltage_correct_map.mp_y_points[4] = 100.0;
-  m_voltage_correct_map.mp_y_points[5] = 130.0;*/
-
-  m_voltage_correct_map.mp_x_points[0] = 45.00;
-  m_voltage_correct_map.mp_x_points[1] = 55.00;
-  m_voltage_correct_map.mp_y_points[0] = 0.000;
-  m_voltage_correct_map.mp_y_points[1] = 30.00;
-  m_voltage_correct_map.mp_y_points[2] = m_max_ac_voltage_release;
+  m_ac_voltage_correct_map.mp_x_points[0] = 45.00;
+  m_ac_voltage_correct_map.mp_x_points[1] = 55.00;
+  m_ac_voltage_correct_map.mp_y_points[0] = 0.000;
+  m_ac_voltage_correct_map.mp_y_points[1] = 30.00;
+  m_ac_voltage_correct_map.mp_y_points[2] = m_max_ac_voltage_release;
 
   irs_u8 koefs_count =
-    m_voltage_correct_map.m_x_count * m_voltage_correct_map.m_y_count;
+    m_ac_voltage_correct_map.m_x_count * m_ac_voltage_correct_map.m_y_count;
   for (irs_u8 i = 0; i < koefs_count; i++) {
-    m_voltage_correct_map.mp_k_array[i] = 1;
+    m_ac_voltage_correct_map.mp_k_array[i] = 1;
   }
-  if (m_voltage_correct_use_b_koefs) {
+  if (m_ac_voltage_correct_use_b_koefs) {
     for (irs_u8 i = 0; i < koefs_count; i++) {
-      m_voltage_correct_map.mp_b_array[i] = 0;
+      m_ac_voltage_correct_map.mp_b_array[i] = 0;
     }
   }
   return correct_size;

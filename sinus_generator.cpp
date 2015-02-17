@@ -305,8 +305,6 @@ dc_generator_t::dc_generator_t(
   m_amplitude(0.f),
   m_frequency(50.),
   m_floor_interval()
-  /*mp_interrupt_generator(ap_interrupt_generator),
-  m_interrupt_freq_boost_factor(a_interrupt_freq_boost_factor),*/
 {
   calc_period_t num = 0;
   calc_period_t denom = 1;
@@ -335,7 +333,6 @@ void dc_generator_t::start()
 
 void dc_generator_t::set_duty_from_amplitude(float a_amplitude)
 {
-  //float duty = static_cast<float>(irs::bound(0.5-0.5*a_amplitude, 0.05, 0.5));
   float duty = static_cast<float>(irs::bound(0.5 + 0.5*a_amplitude, 0.5, 1.));
   IRS_LIB_DBG_MSG(static_cast<irs_u32>(duty*mp_pwm_gen->get_max_duty()));
   mp_pwm_gen->set_duty(duty);
@@ -359,7 +356,6 @@ void dc_generator_t::set_value(unsigned int /*a_value*/)
 void dc_generator_t::set_amplitude(double a_amplitude)
 {
   m_amplitude = irs::bound(a_amplitude, m_min_amplitude, m_max_amplitude);
-  //IRS_LIB_DBG_MSG("m_amplitude = " << m_amplitude);
   set_duty_from_amplitude(m_amplitude);
 }
 

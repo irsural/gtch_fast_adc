@@ -22,7 +22,7 @@ gtch::cfg_t::cfg_t():
   m_key_drv_horizontal_pins(),
   m_key_drv_vertical_pins(),
   m_keyboard_drv(),
-  m_adc_settings(3.3, 10e-6, 10, 0.1, -250),
+  m_adc_settings(3.3, 10e-6, 10, 0.1),
   #if GTCH_SK_STM32F217
   m_adc(ADC3_BASE, irs::arm::st_adc_t::ADC3_PF8_CH6/*ADC1_BASE, irs::arm::st_adc_t::ADC123_PC0_CH10*/,
     irs::make_cnt_s(m_adc_settings.sampling_time)),

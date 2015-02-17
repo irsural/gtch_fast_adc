@@ -117,7 +117,7 @@ irs_u16 irs::arm::st_multi_adc_t::get_u16_maximum()
     static_cast<irs_i16>(adc_max_value) << (16 - adc_resolution));
 }
 
-irs_u16 irs::arm::st_multi_adc_t::get_u16_data(irs_u8 a_channel)
+irs_u16 irs::arm::st_multi_adc_t::get_u16_data(irs_u8 /*a_channel*/)
 {
   return static_cast<irs_u16>(m_value << (16 - adc_resolution));
 }
@@ -134,7 +134,7 @@ irs_u32 irs::arm::st_multi_adc_t::get_u32_maximum()
     static_cast<irs_i32>(adc_max_value) << (32 - adc_resolution));
 }
 
-irs_u32 irs::arm::st_multi_adc_t::get_u32_data(irs_u8 a_channel)
+irs_u32 irs::arm::st_multi_adc_t::get_u32_data(irs_u8 /*a_channel*/)
 {
   return m_value << (32 - adc_resolution);
 }
@@ -149,7 +149,7 @@ float irs::arm::st_multi_adc_t::get_float_maximum()
   return 1.f;
 }
 
-float irs::arm::st_multi_adc_t::get_float_data(irs_u8 a_channel)
+float irs::arm::st_multi_adc_t::get_float_data(irs_u8 /*a_channel*/)
 {
   return static_cast<float>(m_value)/adc_max_value;
 }
@@ -165,7 +165,7 @@ float irs::arm::st_multi_adc_t::get_v_battery()
 }
 
 float irs::arm::st_multi_adc_t::get_temperature_degree_celsius(
-  const float a_vref)
+  const float /*a_vref*/)
 {
   return 0;
 }
@@ -178,8 +178,6 @@ void irs::arm::st_multi_adc_t::tick()
     if (eoc1 == 1) {
       mp_adc->ADC_SR_bit.EOC = 0;
       mp_adc2->ADC_SR_bit.EOC = 0;
-      /*m_regular_channels_values[m_current_channel] =
-        static_cast<irs_u16>(mp_adc->ADC_DR);*/
       irs_i16 data1 = static_cast<irs_i16>(mp_adc->ADC_DR);
       irs_i16 data2 = static_cast<irs_i16>(mp_adc2->ADC_DR);
       m_value = static_cast<irs_u16>(data1 - data2);
@@ -205,24 +203,19 @@ gtch::adc_rms_t::adc_rms_t(
   mp_adc(ap_adc),
   m_adc_channel(a_adc_channel),
   m_current_type(current_type_ac),
-  //m_adc_ad7686_data(mp_adc),
   m_downsampling_factor(a_downsampling_factor),
   m_period_sample_count(a_period_sample_count),
-  //m_sko_period_count(a_sko_period_count),
   m_windows_sko_period_count(a_windows_sko_period_count),
   m_average_period_count(a_average_period_count),
   m_result_sko_point_count(a_result_sko_point_count),
   m_delta_point_count(a_delta_point_count),
-  m_conversion_factor(1/*2.64/12465.*/),
+  m_conversion_factor(1),
   m_buf(m_period_sample_count*period_count, 0),
   m_interrupt_index(0),
   m_interrupt_count(0),
   m_processed_index(0),
   m_adc_read_event(this),
   mp_interrupt_generator(ap_interrupt_generator),
-  /*m_sko_calc(
-    make_windows_sko_size(m_period_sample_count, m_windows_sko_period_count),
-    m_period_sample_count*m_average_period_count),*/
   m_sko_calc(
     make_windows_sko_size(m_period_sample_count, m_windows_sko_period_count),
     m_period_sample_count*m_windows_sko_period_count[adc_type_slow]),
@@ -246,16 +239,10 @@ gtch::adc_rms_t::adc_rms_t(
     m_results.push_back(result);
   }
 
-  /*m_adc_fade_data.x1 = std::numeric_limits<double>::max();
-  m_adc_fade_data.y1 = std::numeric_limits<double>::max();
-  m_adc_fade_data.t = 1/m_sampling_time_s;*/
-
   set_current_type(m_current_type);
 
   mp_interrupt_generator->add_event(&m_adc_read_event);
   m_adc_read_event.enable();
-  //mp_interrupt_generator->set_interval(irs::make_cnt_s(m_sampling_time_s));
-  //m_interrupt_generator.start();
 }
 
 gtch::adc_rms_t::~adc_rms_t()
@@ -300,7 +287,6 @@ void gtch::adc_rms_t::set_current_type(current_type_t a_type)
   if (m_current_type == current_type_ac) {
     m_sko_calc.resize_average(m_period_sample_count*m_average_period_count);
   } else {
-    //m_sko_calc.resize_average(0);
     m_sko_calc.resize_average(
       m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
   }
@@ -348,20 +334,6 @@ void gtch::adc_rms_t::set_convertion_factor(double a_value)
   IRS_LIB_DBG_MSG("Коэф. преобр. АЦП = " << a_value);
 }
 
-/*void gtch::adc_rms_t::set_params(
-  const std::vector<size_type>& a_windows_sko_period_count, double a_fade_t)
-{
-  m_adc_read_event.disable();
-  m_buf.resize(m_period_sample_count*period_count, 0),
-  m_interrupt_index = 0;
-  m_processed_index = 0;
-  for (size_type i = 0; i < a_windows_sko_period_count.size(); i++) {
-    m_sko_calc.resize(i, m_period_sample_count*a_windows_sko_period_count[i]);
-  }
-  //m_adc_fade_data.t = a_fade_t;
-  m_adc_read_event.enable();
-}*/
-
 double gtch::adc_rms_t::get_fade() const
 {
   return m_result_fade*m_conversion_factor;
@@ -369,12 +341,11 @@ double gtch::adc_rms_t::get_fade() const
 
 double gtch::adc_rms_t::get_fade_t() const
 {
-  return 0.;//m_adc_fade_data.t;
+  return 0.;
 }
 
 void gtch::adc_rms_t::set_fade_t(double /*a_t*/)
 {
-  //m_adc_fade_data.t = a_t;
 }
 
 double gtch::adc_rms_t::get_result_sko(size_type a_window_index) const
@@ -507,23 +478,6 @@ void gtch::adc_rms_t::preset()
     const size_type strict_sample_count = m_period_sample_count*period_count;
     m_sko_calc.preset(0, strict_sample_count);
   }
-  /*const size_type size = m_samples.size();
-  const size_type period_count = size/m_period_sample_count;
-  const size_type sample_count = period_count*m_period_sample_count;
-  size_type added_sample_count = 0;
-  const size_type max_size = m_sko_calc[adc_type_slow].max_size();
-  while (true) {
-    for (size_type i = 0; i < m_samples.size; i++) {
-      if (added_sample_count >= max_size) {
-        break;
-      }
-      m_sko_calc[adc_type_slow].add(m_samples[i]);
-      sample_max_count++;
-    }
-    if (added_sample_count >= max_size) {
-      break;
-    }
-  }*/
 }
 
 bool gtch::adc_rms_t::ready(size_type a_window_index) const
@@ -617,9 +571,6 @@ void gtch::adc_rms_t::tick()
         m_results[i].value = m_sko_calc.get(i);
       }
     }
-    /*for (size_type i = 0; i < m_results.size(); i++) {
-      m_results[i].value = m_sko_calc.get(i);
-    }*/
     for (size_type i = 0; i < m_results.size(); i++) {
       if (sko_add) {
         m_results[i].sko.add(m_results[i].value);
@@ -665,11 +616,9 @@ void gtch::adc_rms_t::adc_read_event_t::exec()
       }
 
       for (int i  = 0; i < 2; i++) {
-        //mp_adc_rms->mp_spi->tick();
         mp_adc_rms->mp_adc->tick();
       }
     } else {
-      //mp_adc_rms->mp_spi->tick();
       mp_adc_rms->mp_adc->tick();
     }
   }

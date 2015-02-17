@@ -20,7 +20,6 @@
 
 #include "interrupt_generator.h"
 #include "adc_rms.h"
-#include "gtchadc.h"
 #include "gtchint.h"
 
 #include <irsfinal.h>
@@ -31,22 +30,20 @@ namespace gtch
 struct adc_settings_t
 {
   typedef size_t size_type;
-  typedef adc_filter_t::shift_type shift_type;
+
   float v_reference;
   float sampling_time;
   size_type filter_point_count;
   float filter_update_interval;
-  shift_type shift;
+
   adc_settings_t(float a_v_reference, float a_sampling_time,
     size_type a_filter_point_count,
-    float a_filter_update_interval,
-    shift_type a_shift
+    float a_filter_update_interval
   ):
     v_reference(a_v_reference),
     sampling_time(a_sampling_time),
     filter_point_count(a_filter_point_count),
-    filter_update_interval(a_filter_update_interval),
-    shift(a_shift)
+    filter_update_interval(a_filter_update_interval)
   {
   }
 };
