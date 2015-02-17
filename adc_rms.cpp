@@ -299,13 +299,10 @@ void gtch::adc_rms_t::set_current_type(current_type_t a_type)
   m_current_type = a_type;
   if (m_current_type == current_type_ac) {
     m_sko_calc.resize_average(m_period_sample_count*m_average_period_count);
-    IRS_LIB_DBG_MSG("average = " << m_period_sample_count*m_average_period_count);
   } else {
     //m_sko_calc.resize_average(0);
     m_sko_calc.resize_average(
       m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
-    IRS_LIB_DBG_MSG("average = " << m_period_sample_count*m_windows_sko_period_count[adc_type_slow]);
-
   }
   reset();
 }
@@ -337,7 +334,6 @@ double gtch::adc_rms_t::get_max_voltage_code() const
 
 double gtch::adc_rms_t::get_slow_adc_voltage_code() const
 {
-  //IRS_LIB_DBG_MSG("m_results[adc_type_slow].value = " << m_results[adc_type_slow].value);
   return m_results[adc_type_slow].value;
 }
 

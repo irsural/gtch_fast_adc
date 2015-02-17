@@ -1989,6 +1989,9 @@
         <name>$PROJ_DIR$\..\mxsrclib\hardflowg.h</name>
       </file>
       <file>
+        <name>$PROJ_DIR$\..\mxsrclib\irs_chart_data.cpp</name>
+      </file>
+      <file>
         <name>$PROJ_DIR$\..\mxsrclib\irsadc.cpp</name>
       </file>
       <file>
