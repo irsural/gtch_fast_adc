@@ -1,17 +1,4 @@
-// 03.09.2014 Крашенинников: gtch_rev = 32
-enum { gtch_rev = 32, mxsrclib_rev = 1088, extern_libs_rev = 3 };
-//enum { gtch_rev = 31, mxsrclib_rev = 1088, extern_libs_rev = 3 };
-// 01.04.2011 Крашенинников
-// - изменен год в заставке на 2011
-// - добавлен вывод информации о EEPROM (отодельно параметры и коррекция)
-// - исправлена ошибка работы с термодатчиком при отрицательных температурах
-// - увеличен размер EEPROM коррекции 400 байт всместо 100
-// - добавлена кнопка сброса коррекции по напряжению в текущей точке
-// - вход в меню разработчика в любом состоянии программы
-// - избавился от _pos-переменных и сэкономил 28 байт ОЗУ
-//enum { gtch_rev = 16, mxsrclib_rev = 737 };
-//enum { gtch_rev = 14, mxsrclib_rev = 624 };
-//enum { gtch_rev = 12, mxsrclib_rev = 624 };
+enum { gtch_rev = 13, mxsrclib_rev = 1262, extern_libs_rev = 15 };
 
 #include <irspch.h>
 
@@ -109,7 +96,7 @@ int main()
 
   #endif // GTCH_DEBUG
 
-  irs::mlog() << irsm("\n------------- START 70 -------------") << endl;
+  irs::mlog() << irsm("\n------------- START 80 -------------") << endl;
   irs::mlog() << irsm("gtch rev. ") << gtch_rev << irsm(", ");
   irs::mlog() << irsm("mxsrclib rev. ") << mxsrclib_rev << endl;
   #if GTCH_SK_STM32F217

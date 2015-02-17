@@ -88,8 +88,6 @@ private:
 
 namespace gtch {
 
-
-
 class adc_rms_t
 {
 public:
@@ -127,8 +125,6 @@ public:
   double get_fast_adc_voltage_code() const;
   void set_convertion_factor(double a_value);
   double get_fade() const;
-  //void set_params(const std::vector<size_type>& a_windows_sko_period_count,
-    //double a_fade_t);
   double get_fade_t() const;
   void set_fade_t(double a_t);
   double get_result_sko(size_type a_window_index) const;
@@ -216,32 +212,6 @@ private:
   vector<result_t> m_results;
   double m_result_fade;
   bool m_show_sinus;
-};
-
-class fast_adc_rms_adapter_t: public irs::adc_t
-{
-public:
-  enum { adc_resolution = 16 };
-  fast_adc_rms_adapter_t(adc_rms_t* ap_adc_rms);
-  virtual size_type get_resulution() const;
-  virtual irs_u32 get_u32_data(irs_u8 a_channel);
-  virtual void tick();
-private:
-  fast_adc_rms_adapter_t();
-  adc_rms_t* mp_adc_rms;
-};
-
-class dc_adc_t
-{
-public:
-  dc_adc_t(irs::adc_t* ap_adc,
-    irs_u8 a_adc_channel);
-  double get() const;
-  void set_convertion_factor(double a_value);
-private:
-  irs::adc_t* mp_adc;
-  irs_u8 m_channel;
-  double m_conversion_factor;
 };
 
 } // namespace calibrator

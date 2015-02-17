@@ -1328,7 +1328,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
 
   //!!! Не забыть включить обратно
   if (id() == 0) {
-    //m_buzzer.bzzz();
+    m_buzzer.bzzz();
   }
 
   // Меню
@@ -1699,8 +1699,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_main_menu.hide_item(&m_reset_acv_correct_nonvolatile_memory_item);
 
   //!!! Не забыть включить обратно
-  //mp_window_watchdog->start();
-  //mp_independent_watchdog->start();
+  mp_window_watchdog->start();
+  mp_independent_watchdog->start();
 
 
   m_freq_begin_saved_copy = m_freq_begin;
