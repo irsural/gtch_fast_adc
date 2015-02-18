@@ -334,7 +334,6 @@ void dc_generator_t::start()
 void dc_generator_t::set_duty_from_amplitude(float a_amplitude)
 {
   float duty = static_cast<float>(irs::bound(0.5 + 0.5*a_amplitude, 0.5, 1.));
-  IRS_LIB_DBG_MSG(static_cast<irs_u32>(duty*mp_pwm_gen->get_max_duty()));
   mp_pwm_gen->set_duty(duty);
 }
 
