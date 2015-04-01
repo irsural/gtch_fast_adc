@@ -100,7 +100,7 @@ irs::arm::st_multi_adc_t::~st_multi_adc_t()
 }
 
 irs::arm::st_multi_adc_t::size_type
-irs::arm::st_multi_adc_t::get_resulution() const
+irs::arm::st_multi_adc_t::get_resolution() const
 {
   return adc_resolution;
 }
