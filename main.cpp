@@ -1,4 +1,4 @@
-enum { gtch_rev = 15, mxsrclib_rev = 1265, extern_libs_rev = 15 };
+enum { gtch_rev = 16, mxsrclib_rev = 1258, extern_libs_rev = 20 };
 
 #include <irspch.h>
 

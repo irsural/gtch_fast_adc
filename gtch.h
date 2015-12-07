@@ -225,7 +225,7 @@ template <class T>
 class bounded_user_input_t
 {
 public:
-  bounded_user_input_t(T& a_var, const T& a_step, const T& a_step_max,
+  bounded_user_input_t(T& a_var, T a_step, T a_step_max,
     const T& a_min, const T& a_max);
   ~bounded_user_input_t();
   void add_change_event(mxfact_event_t *ap_event);
@@ -236,6 +236,7 @@ public:
   void dec();
   void set_keys(const irskey_t a_key_inc, const irskey_t a_key_dec);
   void reset_step();
+  void set_step(T a_step, T a_step_max);
 private:
   enum process_t {
     INC,
@@ -246,8 +247,8 @@ private:
     m_step_count_before_step_increment = 9
   };
   T &m_var;
-  const T& m_step;
-  const T m_step_max;
+  T m_step;
+  T m_step_max;
   const T& m_min;
   const T& m_max;
   mxfact_event_t *mp_event;
@@ -259,8 +260,8 @@ private:
 };
 
 template <class T>
-bounded_user_input_t<T>::bounded_user_input_t(T& a_var, const T& a_step,
-  const T& a_step_max, const T& a_min, const T& a_max
+bounded_user_input_t<T>::bounded_user_input_t(T& a_var, T a_step,
+  T a_step_max, const T& a_min, const T& a_max
 ):
   m_var(a_var),
   m_step(a_step),
@@ -365,6 +366,14 @@ template <class T>
 void bounded_user_input_t<T>::reset_step()
 {
   m_current_step = m_step;
+}
+
+template <class T>
+void bounded_user_input_t<T>::set_step(T a_step, T a_step_max)
+{
+  m_step = a_step;
+  m_step_max = a_step_max;
+  reset_step();
 }
 
 //------------------------------------------------------------------------------
@@ -503,12 +512,18 @@ class app_t
   bool m_overcurrent_detection_enabled;
   int_generator_t &m_interrupt_generator;
 
+  // Количество точек на период синусоиды
   size_type m_period_sample_count;
+  // Количество периодов синусоиды, которое участвует в усреднении
   size_type m_sko_period_count;
   size_type m_short_sko_period_count;
+  // Количество периодов синусоиды, которое участвует в расчете среднего
   size_type m_average_period_count;
-  size_type m_sko_point_count;
+  // Количество точек для вычисления СКО результата
+  size_type m_result_sko_point_count;
   size_type m_delta_point_count;
+  // Во сколько раз частота считывания точек с АЦП меньше частоты прерываний
+  size_type m_downsampling_factor;
   gtch::adc_rms_t m_fast_adc_rms;
   enum { interrupt_freq_boost_factor = 2 };
   irs::handle_t<generator_t> mp_generator;
@@ -546,6 +561,7 @@ class app_t
   const counter_t m_reg_interval;
   const float m_meas_gen_value;
   const float m_operating_duty_deviation;
+  // Если true, то прибор в рабочем режиме
   bool m_operating_duty;
   irs::timer_t m_reg_timer;
   irs::pid_data_t m_reg_pd;
@@ -596,8 +612,8 @@ class app_t
     m_termo_item_prec = 2,
     m_adc_item_width = 5,
     m_adc_item_prec = 0,
-    m_reg_item_width = 6,
-    m_reg_item_prec = 4,
+    m_reg_item_width = 7,
+    m_reg_item_prec = 5,
     m_meas_k_item_width = 5,
     m_meas_k_item_prec = 4,
     m_volt_item_width = 5,
@@ -657,8 +673,10 @@ class app_t
   const double m_max_dc_voltage_release;
   double m_min_voltage;
   double m_max_voltage;
-  const double m_voltage_step;
-  const double m_voltage_step_max;
+  const double m_voltage_step_release;
+  const double m_voltage_step_max_release;
+  const double m_voltage_step_debug;
+  const double m_voltage_step_max_debug;  
   double m_voltage_ref;
   irs_menu_simply_item_t<double> m_voltage_ref_item;
   //  Напряжение
@@ -904,12 +922,14 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_sko_period_count(10),//50
   m_short_sko_period_count(10),
   m_average_period_count(1),
-  m_sko_point_count(60),
+  m_result_sko_point_count(60),
   m_delta_point_count(60),
+  m_downsampling_factor(interrupt_freq_boost_factor*CFG::sinus_size/
+    m_period_sample_count),
   m_fast_adc_rms(NULL/*m_cfg.get_fast_adc_spi()*/, m_cfg.get_adc(), 0,
-    &m_interrupt_generator, 4, m_period_sample_count,
+    &m_interrupt_generator, m_downsampling_factor, m_period_sample_count,
     make_adc_channels_sko_period_count(),
-    m_average_period_count, m_sko_point_count, m_delta_point_count),
+    m_average_period_count, m_result_sko_point_count, m_delta_point_count),
 
   mp_generator(new sinus_generator_t(&m_interrupt_generator,
     interrupt_freq_boost_factor, &m_sinus_pwm,
@@ -998,18 +1018,20 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_end(m_max_freq),
   m_freq_end_item(&m_freq_end),
   //  Уставка напряжения
-  m_min_ac_voltage_debug(0.),
+  m_min_ac_voltage_debug(0.001),
   m_max_ac_voltage_debug(300.),
-  m_min_ac_voltage_release(0.),
+  m_min_ac_voltage_release(1.),
   m_max_ac_voltage_release(220.),
-  m_min_dc_voltage_debug(0.),
+  m_min_dc_voltage_debug(0.001),
   m_max_dc_voltage_debug(400.),
-  m_min_dc_voltage_release(0.),
+  m_min_dc_voltage_release(1.),
   m_max_dc_voltage_release(300.),
   m_min_voltage(m_min_ac_voltage_release),
-  m_max_voltage(m_max_ac_voltage_release),
-  m_voltage_step(1.0),
-  m_voltage_step_max(10),
+  m_max_voltage(m_max_ac_voltage_release), 
+  m_voltage_step_release(1.0),
+  m_voltage_step_max_release(10.),
+  m_voltage_step_debug(0.01),
+  m_voltage_step_max_debug(10.),
   m_voltage_ref(m_min_voltage),
   m_voltage_ref_item(&m_voltage_ref),
   //  Напряжение
@@ -1137,8 +1159,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_max_freq),
   m_speed_freq_input(m_speed_freq, m_speed_step, m_steed_step_max, m_min_speed,
     m_max_speed),
-  m_voltage_ref_input(m_voltage_ref, m_voltage_step, m_voltage_step_max,
-    m_min_voltage, m_max_voltage),
+  m_voltage_ref_input(m_voltage_ref, m_voltage_step_release, 
+    m_voltage_step_max_release, m_min_voltage, m_max_voltage),
   m_nonvolatile_update_timer(irs::make_cnt_ms(300)),
   //
   m_trans_ac_k_nonv_event(),
@@ -2459,7 +2481,9 @@ void app_t<CFG>::in_tick()
   if (test_switch_interface_mode(key)) {
     switch (m_interface_mode) {
       case DEBUG: {
-
+        m_voltage_ref_input.set_step(m_voltage_step_release, 
+          m_voltage_step_max_release);
+        
         m_voltage_ref_item.set_length(m_volt_item_width);
         m_voltage_ref_item.set_accuracy(m_volt_item_prec);
         m_voltage_item.set_length(m_volt_item_width);
@@ -2492,6 +2516,9 @@ void app_t<CFG>::in_tick()
       }
       case RELEASE: {
 
+        m_voltage_ref_input.set_step(m_voltage_step_debug, 
+          m_voltage_step_max_debug);
+        
         m_voltage_ref_item.set_length(m_volt_item_width_debug);
         m_voltage_ref_item.set_accuracy(m_volt_item_prec_debug);
         m_voltage_item.set_length(m_volt_item_width_debug);
@@ -2675,16 +2702,22 @@ void app_t<CFG>::in_tick()
     }
     case SETUP_MEAS: {
       m_menu_kb_event.check();
+      
       if (key == m_key_stop) {
         to_stop();
       } else {
         reg_with_meas();
-        if (m_operating_duty) to_pause();
-      }
-      if (m_interface_mode == DEBUG) {
-        if (key == m_key_pause) {
-          m_can_reg = !m_can_reg;
+        if (m_operating_duty) {
+          to_pause();
+        } else {
+          switch_key(key);
         }
+        
+        if (key == m_key_pause) {
+          if (m_interface_mode == DEBUG) {
+            m_can_reg = !m_can_reg;
+          }
+        }       
       }
       break;
     }
@@ -2694,7 +2727,7 @@ void app_t<CFG>::in_tick()
       if (key == m_key_stop) {
         to_stop();
       } else {
-        if (key == m_key_start && m_interface_mode == RELEASE) {
+        if ((key == m_key_start) && (m_interface_mode == RELEASE)) {
           if (m_freq_begin != m_freq_end) {
             m_status = SCAN;
             m_scan_interval = irs::make_cnt_s(m_scan_freq_step / m_speed_freq);
@@ -3358,7 +3391,7 @@ void app_t<CFG>::reset_nonvolatile_memory()
   m_nonvolatile_data.dc_voltage_correct_enable = true;
   m_nonvolatile_data.dc_voltage_correct_koef = 1.f;
   m_nonvolatile_data.freq_correct_enable = true;
-  m_nonvolatile_data.freq_correct_koef = 16009408.f/16000000.f;
+  m_nonvolatile_data.freq_correct_koef = 1.0002f;//16009408.f/16000000.f;
   m_nonvolatile_data.ac_t_adc = 0.1f;
   m_nonvolatile_data.ac_iso_k = 1.f;
   m_nonvolatile_data.ac_iso_t = 1.f;
