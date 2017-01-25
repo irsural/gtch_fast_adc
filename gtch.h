@@ -1269,7 +1269,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_lcd_drv_service.get_width());
   m_lcd_drv_service.outtextpos(0, 1, "      ГТЧ-03М       ");
   m_lcd_drv_service.outtextpos(0, 2, revision_str.c_str());
-  m_lcd_drv_service.outtextpos(0, 3, "  ООО 'РЭС' 2015 г. ");
+  m_lcd_drv_service.outtextpos(0, 3, "  ООО 'РЭС' 2017 г. ");
   m_lcd_drv_service.outtextpos(0, 0, "   www.irsural.ru   ");
 
   {
@@ -1660,6 +1660,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_correct_item.add_change_event(&m_trans_freq_correct_koef_event);
   m_freq_correct_item.set_key_type(IMK_ARROWS);
   m_freq_correct_item.set_change_step(0.001f);
+  m_freq_correct_item.set_change_step_max(1.f);
+  m_freq_correct_item.progressive_change_enabled(true);
+  
   //  Подстройка параметров стрелочками
   m_freq_begin_input.add_change_event(&m_trans_freq_begin_event);
   m_freq_begin_input.add_change_event(&m_trans_freq_begin_nonv_event);

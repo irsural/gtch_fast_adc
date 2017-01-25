@@ -14,7 +14,7 @@
 gtch::pa3_relay_interrupt_generator_t::pa3_relay_interrupt_generator_t()
 {
   RCC_APB2ENR_bit.SYSCFGEN = 1;
-  irs::arm::port_clock_on(GPIO_PORTA);
+  irs::arm::port_clock_on(IRS_PORTA_BASE);
   irs::gpio_moder_input_enable(PA3);
   SYSCFG_EXTICR1_bit.EXTI3 = 0; // 0000: PA3 pin
   SETENA0_bit.SETENA_EXTI3 = 1;

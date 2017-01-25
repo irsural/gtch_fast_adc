@@ -194,7 +194,7 @@ private:
   size_type m_processed_index;
   adc_read_event_t m_adc_read_event;
   interrupt_generator_t* mp_interrupt_generator;
-  irs::fast_multi_sko_with_single_average_t<sample_type, double> m_sko_calc;
+  irs::fast_multi_sko_with_single_average_t<float, double> m_sko_calc;
   irs::loop_timer_t m_sko_timer;
   irs::loop_timer_t m_delta_timer;
   struct result_t
