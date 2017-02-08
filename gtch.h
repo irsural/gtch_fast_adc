@@ -791,7 +791,8 @@ class app_t
   bool m_freq_correct_enable;
   irs_menu_bool_item_t m_freq_correct_enable_item;
   //  Коррекция частоты
-  double m_freq_correct;
+  const double m_freq_correct_set;
+  double m_freq_correct_result;
   irs_menu_double_item_t m_freq_correct_item;
   //  Ввод параметров стрелочками с ограничениями
   bounded_user_input_t<double> m_freq_begin_input;
@@ -1149,8 +1150,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_correct_enable_item((irs_bool*)&m_freq_correct_enable,
     m_can_edit),
   //  Коррекция частоты
-  m_freq_correct(1.),
-  m_freq_correct_item(&m_freq_correct, CAN_WRITE),
+  m_freq_correct_set(45.0),
+  m_freq_correct_result(1.),
+  m_freq_correct_item(&m_freq_correct_result, CAN_WRITE),
 
   // Ввод параметров стрелочками с ограничениями
   m_freq_begin_input(m_freq_begin, m_freq_step, m_freq_step_max, m_min_freq,
@@ -1337,7 +1339,8 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_nonvolatile_data.dc_voltage_correct_koef;
 
   m_freq_correct_enable = m_nonvolatile_data.freq_correct_enable;
-  m_freq_correct = m_freq * m_nonvolatile_data.freq_correct_koef;
+  m_freq_correct_result =
+    m_freq_correct_set * m_nonvolatile_data.freq_correct_koef;
   mp_ac_reg_options->t_adc = m_nonvolatile_data.ac_t_adc;
   mp_ac_reg_options->iso_k = m_nonvolatile_data.ac_iso_k;
   mp_ac_reg_options->iso_t = m_nonvolatile_data.ac_iso_t;
@@ -2418,7 +2421,7 @@ void app_t<CFG>::in_tick()
       }
     }
     if (m_trans_freq_correct_koef_event.check()) {
-      float koef = m_freq_correct / m_freq;
+      float koef = m_freq_correct_result / m_freq_correct_set;
       m_nonvolatile_data.freq_correct_koef = koef;
 
       if (m_freq_correct_enable) {
@@ -2621,6 +2624,8 @@ void app_t<CFG>::in_tick()
           set_mode_ac();
           mp_generator->set_correct_freq_koef(1.0);
           m_status = CORRECT_F;
+          m_freq = m_freq_correct_set;
+          mp_generator->set_frequency(m_freq);
           to_start();
         }
       }
