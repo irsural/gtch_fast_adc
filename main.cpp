@@ -1,4 +1,5 @@
-enum { gtch_rev = 18, mxsrclib_rev = 1332, extern_libs_rev = 23 };
+enum { gtch_rev = 19, mxsrclib_rev = 1333, extern_libs_rev = 23 };
+const char* mxsrclib_branch = "gtch_fast_adc";
 
 #include <irspch.h>
 
@@ -97,8 +98,11 @@ int main()
   #endif // GTCH_DEBUG
 
   irs::mlog() << irsm("\n------------- START 80 -------------") << endl;
-  irs::mlog() << irsm("gtch rev. ") << gtch_rev << irsm(", ");
-  irs::mlog() << irsm("mxsrclib rev. ") << mxsrclib_rev << endl;
+  irs::mlog() << irsm("gtch_rev = ") << gtch_rev << endl;;
+  irs::mlog() << irsm("mxsrclib_rev = ") << mxsrclib_rev;
+  irs::mlog() << "_" << mxsrclib_branch << endl;
+  irs::mlog() << irsm("extern_libs_rev = ") << extern_libs_rev << endl;;
+  irs::mlog() << endl;;
   #if GTCH_SK_STM32F217
   irs::arm::io_pin_t m_memory_chip_select_pin(GPIO_PORTD, 7, irs::io_t::dir_out,
     irs::io_pin_on);

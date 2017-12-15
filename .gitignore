@@ -3,6 +3,10 @@
 /TermIO.log
 /privatecfg.h
 /*.ewt
+List
+Obj
+*.out
+*.sim
 
 # irs global ignore
 *.*~

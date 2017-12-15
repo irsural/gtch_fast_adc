@@ -322,7 +322,7 @@
         <debug>1</debug>
         <option>
           <name>JLinkSpeed</name>
-          <state>32</state>
+          <state>5</state>
         </option>
         <option>
           <name>CCJLinkDoLogfile</name>
@@ -493,11 +493,11 @@
         </option>
         <option>
           <name>CCSwoClockAuto</name>
-          <state>0</state>
+          <state>1</state>
         </option>
         <option>
           <name>CCSwoClockEdit</name>
-          <state>2000</state>
+          <state>5</state>
         </option>
         <option>
           <name>OCJLinkTraceSource</name>
