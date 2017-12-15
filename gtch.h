@@ -676,7 +676,7 @@ class app_t
   const double m_voltage_step_release;
   const double m_voltage_step_max_release;
   const double m_voltage_step_debug;
-  const double m_voltage_step_max_debug;  
+  const double m_voltage_step_max_debug;
   double m_voltage_ref;
   irs_menu_simply_item_t<double> m_voltage_ref_item;
   //  Напряжение
@@ -1028,7 +1028,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_min_dc_voltage_release(1.),
   m_max_dc_voltage_release(300.),
   m_min_voltage(m_min_ac_voltage_release),
-  m_max_voltage(m_max_ac_voltage_release), 
+  m_max_voltage(m_max_ac_voltage_release),
   m_voltage_step_release(1.0),
   m_voltage_step_max_release(10.),
   m_voltage_step_debug(0.01),
@@ -1161,7 +1161,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_max_freq),
   m_speed_freq_input(m_speed_freq, m_speed_step, m_steed_step_max, m_min_speed,
     m_max_speed),
-  m_voltage_ref_input(m_voltage_ref, m_voltage_step_release, 
+  m_voltage_ref_input(m_voltage_ref, m_voltage_step_release,
     m_voltage_step_max_release, m_min_voltage, m_max_voltage),
   m_nonvolatile_update_timer(irs::make_cnt_ms(300)),
   //
@@ -1665,7 +1665,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_correct_item.set_change_step(0.001f);
   m_freq_correct_item.set_change_step_max(1.f);
   m_freq_correct_item.progressive_change_enabled(true);
-  
+
   //  Подстройка параметров стрелочками
   m_freq_begin_input.add_change_event(&m_trans_freq_begin_event);
   m_freq_begin_input.add_change_event(&m_trans_freq_begin_nonv_event);
@@ -2487,9 +2487,9 @@ void app_t<CFG>::in_tick()
   if (test_switch_interface_mode(key)) {
     switch (m_interface_mode) {
       case DEBUG: {
-        m_voltage_ref_input.set_step(m_voltage_step_release, 
+        m_voltage_ref_input.set_step(m_voltage_step_release,
           m_voltage_step_max_release);
-        
+
         m_voltage_ref_item.set_length(m_volt_item_width);
         m_voltage_ref_item.set_accuracy(m_volt_item_prec);
         m_voltage_item.set_length(m_volt_item_width);
@@ -2522,9 +2522,9 @@ void app_t<CFG>::in_tick()
       }
       case RELEASE: {
 
-        m_voltage_ref_input.set_step(m_voltage_step_debug, 
+        m_voltage_ref_input.set_step(m_voltage_step_debug,
           m_voltage_step_max_debug);
-        
+
         m_voltage_ref_item.set_length(m_volt_item_width_debug);
         m_voltage_ref_item.set_accuracy(m_volt_item_prec_debug);
         m_voltage_item.set_length(m_volt_item_width_debug);
@@ -2710,7 +2710,7 @@ void app_t<CFG>::in_tick()
     }
     case SETUP_MEAS: {
       m_menu_kb_event.check();
-      
+
       if (key == m_key_stop) {
         to_stop();
       } else {
@@ -2720,12 +2720,12 @@ void app_t<CFG>::in_tick()
         } else {
           switch_key(key);
         }
-        
+
         if (key == m_key_pause) {
           if (m_interface_mode == DEBUG) {
             m_can_reg = !m_can_reg;
           }
-        }       
+        }
       }
       break;
     }
