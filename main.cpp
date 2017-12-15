@@ -1,4 +1,4 @@
-enum { gtch_rev = 19, mxsrclib_rev = 1333, extern_libs_rev = 23 };
+enum { gtch_rev = 20, mxsrclib_rev = 1333, extern_libs_rev = 23 };
 const char* mxsrclib_branch = "gtch_fast_adc";
 
 #include <irspch.h>
