@@ -650,7 +650,7 @@ class app_t
   const double m_min_speed;
   const double m_max_speed;
   const double m_speed_step;
-  const double m_steed_step_max;
+  const double m_speed_step_max;
   double m_speed_freq_saved_copy;
   double m_speed_freq;
   irs_menu_simply_item_t<double> m_speed_freq_item;
@@ -1004,9 +1004,9 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
   m_freq_item(&m_freq),
   //  Скорость изменения частоты
   m_min_speed(0.01),
-  m_max_speed(1.0),
+  m_max_speed(10.0),
   m_speed_step(0.01),
-  m_steed_step_max(1),
+  m_speed_step_max(1),
   m_speed_freq_saved_copy(m_min_speed),
   m_speed_freq(m_min_speed),
   m_speed_freq_item(&m_speed_freq),
@@ -1159,7 +1159,7 @@ app_t<CFG>::app_t(CFG &a_cfg, size_t a_revision):
     m_max_freq),
   m_freq_end_input(m_freq_end, m_freq_step, m_freq_step_max, m_min_freq,
     m_max_freq),
-  m_speed_freq_input(m_speed_freq, m_speed_step, m_steed_step_max, m_min_speed,
+  m_speed_freq_input(m_speed_freq, m_speed_step, m_speed_step_max, m_min_speed,
     m_max_speed),
   m_voltage_ref_input(m_voltage_ref, m_voltage_step_release,
     m_voltage_step_max_release, m_min_voltage, m_max_voltage),
